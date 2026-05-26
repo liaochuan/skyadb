@@ -1,0 +1,118 @@
+name: Android CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - dev
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  build:
+    name: Build and static check
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: "9.5.1"
+
+      - name: Decode release signing key
+        if: github.event_name != 'pull_request'
+        env:
+          SIGNING_KEY_BASE64: ${{ secrets.SIGNING_KEY_BASE64 }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${SIGNING_KEY_BASE64}" || -z "${KEY_ALIAS}" || -z "${KEY_STORE_PASSWORD}" || -z "${KEY_PASSWORD}" ]]; then
+            echo "Release signing secrets are required: SIGNING_KEY_BASE64, KEY_ALIAS, KEY_STORE_PASSWORD, KEY_PASSWORD." >&2
+            exit 1
+          fi
+          mkdir -p "${RUNNER_TEMP}/signing"
+          echo "${SIGNING_KEY_BASE64}" | base64 --decode > "${RUNNER_TEMP}/signing/release.p12"
+
+      - name: Run unit tests
+        run: gradle --no-daemon testDebugUnitTest
+
+      - name: Run Android lint
+        run: gradle --no-daemon lintRelease
+
+      - name: Build release APK
+        env:
+          SIGNING_STORE_FILE: ${{ runner.temp }}/signing/release.p12
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: gradle --no-daemon assembleRelease
+
+      - name: Publish release APK to GitHub Releases
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          RELEASE_TAG="${GITHUB_REF_NAME}"
+          if [[ "${GITHUB_REF_TYPE}" != "tag" ]]; then
+            RELEASE_TAG="v1.0.0"
+          fi
+          APK_PATH="$(find app/build/outputs/apk/release -name '*.apk' | head -n 1)"
+          RELEASE_TITLE="skyadb ${RELEASE_TAG}"
+          CURRENT_TAG="${RELEASE_TAG}"
+          PREVIOUS_TAG="$(git tag --sort=-v:refname | grep -E '^v' | grep -v "^${CURRENT_TAG}$" | head -n 1 || true)"
+          if [[ -n "${PREVIOUS_TAG}" ]]; then
+            RANGE="${PREVIOUS_TAG}..HEAD"
+          else
+            RANGE="HEAD"
+          fi
+          CHANGELOG="$(git log "${RANGE}" --no-merges --pretty=format:'- %s (%h)' || true)"
+          if [[ -z "${CHANGELOG}" ]]; then
+            CHANGELOG="- 本次发布未检测到新的提交记录。"
+          fi
+          RELEASE_NOTES="$(mktemp)"
+          {
+            echo "## 更新记录"
+            echo
+            echo "${CHANGELOG}"
+          } > "${RELEASE_NOTES}"
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release edit "${RELEASE_TAG}" \
+              --title "${RELEASE_TITLE}" \
+              --notes-file "${RELEASE_NOTES}"
+            gh release upload "${RELEASE_TAG}" "${APK_PATH}" --clobber
+          else
+            gh release create "${RELEASE_TAG}" "${APK_PATH}" \
+              --title "${RELEASE_TITLE}" \
+              --notes-file "${RELEASE_NOTES}"
+          fi

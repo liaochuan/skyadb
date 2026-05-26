@@ -1,0 +1,375 @@
+package com.sky22333.skyadb.ui.device
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Android
+import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.sky22333.skyadb.model.ConnectionState
+import com.sky22333.skyadb.model.DeviceInfo
+import com.sky22333.skyadb.model.OperationStatus
+import com.sky22333.skyadb.ui.components.AppStatusBadge
+import com.sky22333.skyadb.ui.components.SectionHeader
+import com.sky22333.skyadb.ui.theme.AppDimens
+import com.sky22333.skyadb.ui.theme.AdbManagerTheme
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DeviceScreen(
+    onAppsClick: () -> Unit = {},
+    onLocalAppsClick: () -> Unit = {},
+    onInstallClick: () -> Unit = {},
+    onDownloadClick: () -> Unit = {},
+    onFilesClick: () -> Unit = {},
+    onScreenshotClick: () -> Unit = {},
+    onShellClick: () -> Unit = {},
+    viewModel: DeviceViewModel = viewModel(),
+) {
+    val uiState by viewModel.uiState.collectAsState()
+
+    DeviceContent(
+        uiState = uiState,
+        onAppsClick = onAppsClick,
+        onLocalAppsClick = onLocalAppsClick,
+        onInstallClick = onInstallClick,
+        onDownloadClick = onDownloadClick,
+        onFilesClick = onFilesClick,
+        onScreenshotClick = onScreenshotClick,
+        onShellClick = onShellClick,
+        onRefreshClick = viewModel::refreshDeviceInfo,
+        onToggleInfoClick = viewModel::toggleInfoExpanded,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DeviceContent(
+    uiState: DeviceUiState,
+    onAppsClick: () -> Unit,
+    onLocalAppsClick: () -> Unit,
+    onInstallClick: () -> Unit,
+    onDownloadClick: () -> Unit,
+    onFilesClick: () -> Unit,
+    onScreenshotClick: () -> Unit,
+    onShellClick: () -> Unit,
+    onRefreshClick: () -> Unit,
+    onToggleInfoClick: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        TopAppBar(
+            title = { Text("设备详情") },
+            actions = {
+                IconButton(
+                    onClick = onRefreshClick,
+                    enabled = !uiState.refreshing && uiState.connectionState == ConnectionState.Connected,
+                    modifier = Modifier.size(36.dp),
+                ) {
+                    if (uiState.refreshing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Outlined.Refresh,
+                            contentDescription = "刷新设备信息",
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+            },
+        )
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(AppDimens.ScreenPadding),
+            verticalArrangement = Arrangement.spacedBy(AppDimens.SectionGap),
+        ) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(AppDimens.CardRadius),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    ),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(AppDimens.CardPadding),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column {
+                                Text(
+                                    text = uiState.deviceName,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    text = "连接设备后会显示完整系统信息",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                            AppStatusBadge(state = uiState.connectionState)
+                        }
+                    }
+                }
+            }
+
+            item { SectionHeader(title = "快捷操作") }
+            item {
+                QuickActionGrid(
+                    onAppsClick = onAppsClick,
+                    onLocalAppsClick = onLocalAppsClick,
+                    onInstallClick = onInstallClick,
+                    onDownloadClick = onDownloadClick,
+                    onFilesClick = onFilesClick,
+                    onScreenshotClick = onScreenshotClick,
+                    onShellClick = onShellClick,
+                )
+            }
+
+            item {
+                SectionHeader(
+                    title = "系统信息",
+                    description = if (uiState.infoExpanded) "基础信息缺失时会显示为未知" else "点击图标展开查看",
+                    trailing = {
+                        IconButton(
+                            onClick = onToggleInfoClick,
+                            modifier = Modifier.size(36.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Info,
+                                contentDescription = if (uiState.infoExpanded) "收起系统信息" else "查看系统信息",
+                                modifier = Modifier.size(18.dp),
+                                tint = if (uiState.infoExpanded) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            )
+                        }
+                    },
+                )
+            }
+            if (uiState.infoExpanded) {
+                item { DeviceRefreshStatus(status = uiState.refreshStatus) }
+                item {
+                    InfoGrid(
+                        items = listOf(
+                            "品牌" to uiState.info.brand,
+                            "型号" to uiState.info.model,
+                            "Android 版本" to uiState.info.androidVersion,
+                            "SDK" to uiState.info.sdk,
+                            "ABI" to uiState.info.abi,
+                            "分辨率" to uiState.info.resolution,
+                            "电池" to uiState.info.battery,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeviceRefreshStatus(status: OperationStatus) {
+    when (status) {
+        OperationStatus.Idle -> Unit
+        is OperationStatus.Running -> Text(
+            text = status.text,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+        )
+        is OperationStatus.Success -> Text(
+            text = status.text,
+            color = MaterialTheme.colorScheme.primary,
+            style = MaterialTheme.typography.bodySmall,
+        )
+        is OperationStatus.Failed -> Text(
+            text = "${status.text}：${status.suggestion}",
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+}
+
+@Composable
+private fun InfoGrid(items: List<Pair<String, String>>) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        items.forEach { (label, value) ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(AppDimens.CardRadius),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                ),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = AppDimens.CardPadding, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = label,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(text = value, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickActionGrid(
+    onAppsClick: () -> Unit,
+    onLocalAppsClick: () -> Unit,
+    onInstallClick: () -> Unit,
+    onDownloadClick: () -> Unit,
+    onFilesClick: () -> Unit,
+    onScreenshotClick: () -> Unit,
+    onShellClick: () -> Unit,
+) {
+    val actions = listOf(
+        "应用管理" to Icons.Outlined.Apps,
+        "本机应用" to Icons.Outlined.Apps,
+        "安装 APK" to Icons.Outlined.Android,
+        "在线下载" to Icons.Outlined.Download,
+        "文件传输" to Icons.Outlined.FolderOpen,
+        "Shell" to Icons.Outlined.Code,
+        "截图" to Icons.Outlined.PhotoCamera,
+    )
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        actions.forEach { (label, icon) ->
+            QuickAction(
+                label = label,
+                icon = icon,
+                onClick = when (label) {
+                    "应用管理" -> onAppsClick
+                    "本机应用" -> onLocalAppsClick
+                    "安装 APK" -> onInstallClick
+                    "在线下载" -> onDownloadClick
+                    "文件传输" -> onFilesClick
+                    "Shell" -> onShellClick
+                    "截图" -> onScreenshotClick
+                    else -> ({})
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun QuickAction(
+    label: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(AppDimens.CardRadius),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(AppDimens.CardPadding),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(imageVector = icon, contentDescription = null)
+            Text(text = label, style = MaterialTheme.typography.bodyLarge)
+        }
+    }
+}
+
+@Preview(name = "设备详情 - 未连接", showBackground = true, widthDp = 390)
+@Composable
+private fun DeviceContentDisconnectedPreview() {
+    AdbManagerTheme(dynamicColor = false) {
+        DeviceContent(
+            uiState = DeviceUiState(),
+            onAppsClick = {},
+            onLocalAppsClick = {},
+            onInstallClick = {},
+            onDownloadClick = {},
+            onFilesClick = {},
+            onScreenshotClick = {},
+            onShellClick = {},
+            onRefreshClick = {},
+            onToggleInfoClick = {},
+        )
+    }
+}
+
+@Preview(name = "设备详情 - 已连接", showBackground = true, widthDp = 390)
+@Composable
+private fun DeviceContentConnectedPreview() {
+    AdbManagerTheme(dynamicColor = false) {
+        DeviceContent(
+            uiState = DeviceUiState(
+                deviceName = "客厅电视",
+                connectionState = ConnectionState.Connected,
+                info = DeviceInfo(
+                    brand = "Google",
+                    model = "Android TV",
+                    androidVersion = "14",
+                    sdk = "34",
+                    abi = "arm64-v8a",
+                    resolution = "3840 x 2160",
+                    battery = "未知",
+                ),
+            ),
+            onAppsClick = {},
+            onLocalAppsClick = {},
+            onInstallClick = {},
+            onDownloadClick = {},
+            onFilesClick = {},
+            onScreenshotClick = {},
+            onShellClick = {},
+            onRefreshClick = {},
+            onToggleInfoClick = {},
+        )
+    }
+}

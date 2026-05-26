@@ -1,0 +1,315 @@
+package com.sky22333.skyadb.adb
+
+import com.flyfishxu.kadb.Kadb
+import com.sky22333.skyadb.model.AdbOperationResult
+import com.sky22333.skyadb.model.AppInfo
+import com.sky22333.skyadb.model.DeviceInfo
+import com.sky22333.skyadb.model.ShellCommandResult
+import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+class KadbManager {
+    private var activeKadb: Kadb? = null
+    private var activeEndpoint: String? = null
+
+    suspend fun connect(
+        host: String,
+        port: Int,
+        connectTimeoutMillis: Int = 10_000,
+        socketTimeoutMillis: Int = 30_000,
+    ): AdbOperationResult<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            val kadb = Kadb.create(host, port, connectTimeoutMillis, socketTimeoutMillis)
+            val probe = kadb.shell("echo kadb_ready")
+            if (probe.exitCode != 0) {
+                return@withContext AdbOperationResult.Failure(
+                    message = "连接失败",
+                    suggestion = "设备已响应但命令执行失败，请确认目标设备已允许无线调试授权。",
+                )
+            }
+            activeKadb = kadb
+            activeEndpoint = "$host:$port"
+            AdbOperationResult.Success(activeEndpoint.orEmpty())
+        }.getOrElse { error ->
+            AdbOperationResult.Failure(
+                message = "无法连接到设备",
+                suggestion = "请确认设备与本机处于同一网络、ADB 端口正确，并已允许调试授权。",
+                cause = error,
+            )
+        }
+    }
+
+    suspend fun pair(
+        host: String,
+        port: Int,
+        pairingCode: String,
+        name: String = "sky adb",
+    ): AdbOperationResult<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            Kadb.pair(host, port, pairingCode, name)
+            AdbOperationResult.Success(Unit)
+        }.getOrElse { error ->
+            AdbOperationResult.Failure(
+                message = "无线调试配对失败",
+                suggestion = "请确认配对码未过期，配对 IP 和配对端口来自目标设备的配对窗口。",
+                cause = error,
+            )
+        }
+    }
+
+    suspend fun shell(command: String): AdbOperationResult<ShellCommandResult> = withContext(Dispatchers.IO) {
+        val kadb = activeKadb ?: return@withContext AdbOperationResult.Failure(
+            message = "未连接设备",
+            suggestion = "请先在首页连接设备，再执行 Shell 命令。",
+        )
+
+        runCatching {
+            val response = kadb.shell(command)
+            AdbOperationResult.Success(
+                ShellCommandResult(
+                    command = command,
+                    output = response.output,
+                    errorOutput = response.errorOutput,
+                    exitCode = response.exitCode,
+                ),
+            )
+        }.getOrElse { error ->
+            AdbOperationResult.Failure(
+                message = "命令执行失败",
+                suggestion = "请检查命令是否正确，或确认设备仍保持连接。",
+                cause = error,
+            )
+        }
+    }
+
+    suspend fun fetchDeviceInfo(): AdbOperationResult<DeviceInfo> = withContext(Dispatchers.IO) {
+        val kadb = activeKadb ?: return@withContext AdbOperationResult.Failure(
+            message = "未连接设备",
+            suggestion = "请先连接设备，再查看设备详情。",
+        )
+
+        runCatching {
+            val brand = kadb.shell("getprop ro.product.brand").output.trim().ifBlank { "未知" }
+            val model = kadb.shell("getprop ro.product.model").output.trim().ifBlank { "未知" }
+            val androidVersion = kadb.shell("getprop ro.build.version.release").output.trim().ifBlank { "未知" }
+            val sdk = kadb.shell("getprop ro.build.version.sdk").output.trim().ifBlank { "未知" }
+            val abi = kadb.shell("getprop ro.product.cpu.abi").output.trim().ifBlank { "未知" }
+            val resolution = parseResolution(kadb.shell("wm size").output)
+            val battery = parseBatteryLevel(kadb.shell("dumpsys battery").output)
+
+            AdbOperationResult.Success(
+                DeviceInfo(
+                    brand = brand,
+                    model = model,
+                    androidVersion = androidVersion,
+                    sdk = sdk,
+                    abi = abi,
+                    resolution = resolution,
+                    battery = battery,
+                ),
+            )
+        }.getOrElse { error ->
+            AdbOperationResult.Failure(
+                message = "读取设备信息失败",
+                suggestion = "请确认设备仍在线，并允许执行 ADB 命令。",
+                cause = error,
+            )
+        }
+    }
+
+    suspend fun install(apkFile: File): AdbOperationResult<Unit> = withContext(Dispatchers.IO) {
+        val kadb = activeKadb ?: return@withContext AdbOperationResult.Failure(
+            message = "未连接设备",
+            suggestion = "请先连接设备，再安装 APK。",
+        )
+
+        runCatching {
+            kadb.install(apkFile)
+            AdbOperationResult.Success(Unit)
+        }.getOrElse { error ->
+            AdbOperationResult.Failure(
+                message = "APK 安装失败",
+                suggestion = "请确认 APK 文件完整、设备存储空间充足，并允许安装该应用。",
+                cause = error,
+            )
+        }
+    }
+
+    suspend fun uninstall(packageName: String): AdbOperationResult<Unit> = withContext(Dispatchers.IO) {
+        val kadb = activeKadb ?: return@withContext AdbOperationResult.Failure(
+            message = "未连接设备",
+            suggestion = "请先连接设备，再卸载应用。",
+        )
+
+        runCatching {
+            kadb.uninstall(packageName)
+            AdbOperationResult.Success(Unit)
+        }.getOrElse { error ->
+            AdbOperationResult.Failure(
+                message = "应用卸载失败",
+                suggestion = "请确认包名正确，且该应用允许被当前用户卸载。",
+                cause = error,
+            )
+        }
+    }
+
+    suspend fun forceStopApp(packageName: String): AdbOperationResult<Unit> = withContext(Dispatchers.IO) {
+        val result = shell("am force-stop $packageName")
+        when (result) {
+            is AdbOperationResult.Success -> {
+                if (result.data.exitCode == 0) {
+                    AdbOperationResult.Success(Unit)
+                } else {
+                    AdbOperationResult.Failure(
+                        message = "停止应用失败",
+                        suggestion = result.data.errorOutput.ifBlank { "请确认包名正确，且设备允许停止该应用。" },
+                    )
+                }
+            }
+            is AdbOperationResult.Failure -> result
+        }
+    }
+
+    suspend fun launchApp(packageName: String): AdbOperationResult<Unit> = withContext(Dispatchers.IO) {
+        val result = shell("monkey -p $packageName 1")
+        when (result) {
+            is AdbOperationResult.Success -> {
+                if (result.data.exitCode == 0) {
+                    AdbOperationResult.Success(Unit)
+                } else {
+                    AdbOperationResult.Failure(
+                        message = "启动应用失败",
+                        suggestion = result.data.errorOutput.ifBlank { "请确认包名正确，且目标应用存在可启动入口。" },
+                    )
+                }
+            }
+            is AdbOperationResult.Failure -> result
+        }
+    }
+
+    suspend fun listApps(): AdbOperationResult<List<AppInfo>> = withContext(Dispatchers.IO) {
+        val kadb = activeKadb ?: return@withContext AdbOperationResult.Failure(
+            message = "未连接设备",
+            suggestion = "请先连接设备，再查看应用列表。",
+        )
+
+        runCatching {
+            val userPackages = parsePackageList(kadb.shell("pm list packages -3").output, isSystem = false)
+            val systemPackages = parsePackageList(kadb.shell("pm list packages -s").output, isSystem = true)
+            AdbOperationResult.Success((userPackages + systemPackages).sortedBy { it.packageName })
+        }.getOrElse { error ->
+            AdbOperationResult.Failure(
+                message = "读取应用列表失败",
+                suggestion = "请确认设备仍在线，并允许执行 pm list packages 命令。",
+                cause = error,
+            )
+        }
+    }
+
+    suspend fun push(localFile: File, remotePath: String): AdbOperationResult<Unit> = withContext(Dispatchers.IO) {
+        val kadb = activeKadb ?: return@withContext AdbOperationResult.Failure(
+            message = "未连接设备",
+            suggestion = "请先连接设备，再推送文件。",
+        )
+
+        runCatching {
+            kadb.push(localFile, remotePath)
+            AdbOperationResult.Success(Unit)
+        }.getOrElse { error ->
+            AdbOperationResult.Failure(
+                message = "文件推送失败",
+                suggestion = "请确认本地文件存在，目标路径可写，并保持设备连接。",
+                cause = error,
+            )
+        }
+    }
+
+    suspend fun pull(remotePath: String, localFile: File): AdbOperationResult<Unit> = withContext(Dispatchers.IO) {
+        val kadb = activeKadb ?: return@withContext AdbOperationResult.Failure(
+            message = "未连接设备",
+            suggestion = "请先连接设备，再拉取文件。",
+        )
+
+        runCatching {
+            kadb.pull(localFile, remotePath)
+            AdbOperationResult.Success(Unit)
+        }.getOrElse { error ->
+            AdbOperationResult.Failure(
+                message = "文件拉取失败",
+                suggestion = "请确认设备路径存在，本机保存位置可写，并保持设备连接。",
+                cause = error,
+            )
+        }
+    }
+
+    suspend fun captureScreenshot(localFile: File): AdbOperationResult<File> = withContext(Dispatchers.IO) {
+        val remotePath = "/sdcard/Download/adb-manager-screenshot-${System.currentTimeMillis()}.png"
+        when (val captureResult = shell("screencap -p $remotePath")) {
+            is AdbOperationResult.Failure -> captureResult
+            is AdbOperationResult.Success -> {
+                if (captureResult.data.exitCode != 0) {
+                    return@withContext AdbOperationResult.Failure(
+                        message = "截图失败",
+                        suggestion = captureResult.data.errorOutput.ifBlank { "请确认设备允许执行 screencap 命令。" },
+                    )
+                }
+                localFile.parentFile?.mkdirs()
+                when (val pullResult = pull(remotePath, localFile)) {
+                    is AdbOperationResult.Success -> {
+                        shell("rm $remotePath")
+                        AdbOperationResult.Success(localFile)
+                    }
+                    is AdbOperationResult.Failure -> pullResult
+                }
+            }
+        }
+    }
+
+    fun disconnect() {
+        activeKadb?.close()
+        activeKadb = null
+        activeEndpoint = null
+    }
+
+    fun currentEndpoint(): String? = activeEndpoint
+
+    suspend fun checkRuntimeReady(): Boolean = true
+
+    private fun parseResolution(output: String): String {
+        return output
+            .lineSequence()
+            .firstOrNull { it.contains("Physical size") || it.contains("Override size") }
+            ?.substringAfter(":")
+            ?.trim()
+            ?.ifBlank { null }
+            ?: "未知"
+    }
+
+    private fun parseBatteryLevel(output: String): String {
+        val level = output
+            .lineSequence()
+            .firstOrNull { it.trim().startsWith("level:") }
+            ?.substringAfter(":")
+            ?.trim()
+
+        return if (level.isNullOrBlank()) "未知" else "$level%"
+    }
+
+    private fun parsePackageList(output: String, isSystem: Boolean): List<AppInfo> {
+        return output
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.startsWith("package:") }
+            .map { it.removePrefix("package:") }
+            .filter { it.isNotBlank() }
+            .map { packageName ->
+                AppInfo(
+                    packageName = packageName,
+                    label = packageName.substringAfterLast('.'),
+                    isSystem = isSystem,
+                )
+            }
+            .toList()
+    }
+}

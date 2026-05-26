@@ -1,0 +1,291 @@
+package com.sky22333.skyadb.ui.localapps
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Android
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.sky22333.skyadb.localapps.LocalInstalledApp
+import com.sky22333.skyadb.model.OperationStatus
+import com.sky22333.skyadb.ui.components.EmptyState
+import com.sky22333.skyadb.ui.components.SectionHeader
+import com.sky22333.skyadb.ui.theme.AdbManagerTheme
+import com.sky22333.skyadb.ui.theme.AppDimens
+import java.util.Locale
+
+@Composable
+fun LocalAppsScreen(
+    onBackClick: () -> Unit,
+    viewModel: LocalAppsViewModel = viewModel(),
+) {
+    val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.loadApps()
+    }
+
+    LocalAppsContent(
+        uiState = uiState,
+        onBackClick = onBackClick,
+        onQueryChanged = viewModel::onQueryChanged,
+        onRefreshClick = { viewModel.loadApps(force = true) },
+        onInstallClick = viewModel::installToDevice,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LocalAppsContent(
+    uiState: LocalAppsUiState,
+    onBackClick: () -> Unit,
+    onQueryChanged: (String) -> Unit,
+    onRefreshClick: () -> Unit,
+    onInstallClick: (LocalInstalledApp) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        TopAppBar(
+            title = {
+                Column {
+                    Text("本机应用")
+                    Text(
+                        "导出单 APK 用户应用并安装到目标设备",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            },
+            navigationIcon = {
+                IconButton(onClick = onBackClick) {
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回")
+                }
+            },
+            actions = {
+                IconButton(onClick = onRefreshClick, enabled = !uiState.loading) {
+                    Icon(Icons.Outlined.Refresh, contentDescription = "刷新本机应用")
+                }
+            },
+        )
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(AppDimens.ScreenPadding),
+            verticalArrangement = Arrangement.spacedBy(AppDimens.SectionGap),
+        ) {
+            item {
+                OutlinedTextField(
+                    value = uiState.query,
+                    onValueChange = onQueryChanged,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("搜索本机应用") },
+                    placeholder = { Text("输入应用名或包名") },
+                    singleLine = true,
+                )
+            }
+            item { LocalAppsStatus(status = uiState.operationStatus) }
+            item {
+                SectionHeader(
+                    title = "用户应用",
+                    description = "共 ${uiState.filteredApps.size} 个，当前仅支持可启动的单 APK 应用",
+                )
+            }
+            if (uiState.loading) {
+                item { LinearProgressIndicator(modifier = Modifier.fillMaxWidth()) }
+            }
+            if (!uiState.loading && uiState.filteredApps.isEmpty()) {
+                item {
+                    EmptyState(
+                        title = "暂无可显示应用",
+                        message = "没有读取到用户应用，或当前搜索没有结果。",
+                    )
+                }
+            } else {
+                items(uiState.filteredApps, key = { it.packageName }) { app ->
+                    LocalAppCard(
+                        app = app,
+                        installing = uiState.operationStatus is OperationStatus.Running,
+                        onInstallClick = onInstallClick,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LocalAppCard(
+    app: LocalInstalledApp,
+    installing: Boolean,
+    onInstallClick: (LocalInstalledApp) -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(AppDimens.CardRadius),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 72.dp)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Card(
+                modifier = Modifier.size(38.dp),
+                shape = RoundedCornerShape(8.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Android,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = app.label,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = app.packageName,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = if (app.versionName.isBlank()) formatSize(app.apkSizeBytes) else "${app.versionName} · ${formatSize(app.apkSizeBytes)}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                AssistChip(
+                    onClick = {},
+                    label = { Text(if (app.installable) "单 APK" else "暂不支持") },
+                )
+                Button(
+                    onClick = { onInstallClick(app) },
+                    enabled = app.installable && !installing,
+                ) {
+                    Icon(Icons.Outlined.Android, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("安装")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LocalAppsStatus(status: OperationStatus) {
+    when (status) {
+        OperationStatus.Idle -> Unit
+        is OperationStatus.Running -> {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                Text(status.text, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        is OperationStatus.Success -> Text(status.text, color = MaterialTheme.colorScheme.primary)
+        is OperationStatus.Failed -> Text(
+            text = "${status.text}：${status.suggestion}",
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+}
+
+private fun formatSize(bytes: Long): String {
+    if (bytes <= 0L) return "未知大小"
+    val mb = bytes / 1024.0 / 1024.0
+    return if (mb >= 1.0) {
+        String.format(Locale.US, "%.1f MB", mb)
+    } else {
+        "${bytes / 1024} KB"
+    }
+}
+
+@Preview(name = "本机应用", showBackground = true, widthDp = 390)
+@Composable
+private fun LocalAppsContentPreview() {
+    AdbManagerTheme(dynamicColor = false) {
+        LocalAppsContent(
+            uiState = LocalAppsUiState(
+                apps = listOf(
+                    LocalInstalledApp(
+                        packageName = "com.example.player",
+                        label = "视频播放器",
+                        sourcePath = "/data/app/player/base.apk",
+                        versionName = "1.2.0",
+                        isSingleApk = true,
+                        apkSizeBytes = 18_500_000,
+                    ),
+                    LocalInstalledApp(
+                        packageName = "com.example.split",
+                        label = "拆分应用",
+                        sourcePath = "/data/app/split/base.apk",
+                        versionName = "2.0.0",
+                        isSingleApk = false,
+                        apkSizeBytes = 0,
+                    ),
+                ),
+            ),
+            onBackClick = {},
+            onQueryChanged = {},
+            onRefreshClick = {},
+            onInstallClick = {},
+        )
+    }
+}
