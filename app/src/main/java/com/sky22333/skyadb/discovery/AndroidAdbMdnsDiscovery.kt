@@ -1,9 +1,12 @@
 package com.sky22333.skyadb.discovery
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import android.os.Build
 import java.util.ArrayDeque
+import java.util.concurrent.Executor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,7 +16,9 @@ class AndroidAdbMdnsDiscovery(
 ) : AdbMdnsDiscovery {
     private val nsdManager = context.applicationContext.getSystemService(NsdManager::class.java)
     private val lock = Any()
+    private val callbackExecutor = Executor { command -> command.run() }
     private val listeners = mutableMapOf<AdbMdnsServiceType, NsdManager.DiscoveryListener>()
+    private val serviceCallbacks = mutableMapOf<String, NsdManager.ServiceInfoCallback>()
     private val endpoints = linkedMapOf<String, AdbMdnsEndpoint>()
     private val pendingResolves = ArrayDeque<Pair<NsdServiceInfo, AdbMdnsServiceType>>()
     private var resolving = false
@@ -47,6 +52,7 @@ class AndroidAdbMdnsDiscovery(
         currentListeners.forEach { listener ->
             runCatching { nsdManager.stopServiceDiscovery(listener) }
         }
+        stopServiceInfoCallbacks()
 
         synchronized(lock) {
             mutableState.value = AdbMdnsDiscoveryState(running = false)
@@ -60,10 +66,15 @@ class AndroidAdbMdnsDiscovery(
             }
 
             override fun onServiceFound(serviceInfo: NsdServiceInfo) {
-                enqueueResolve(serviceInfo, type)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    registerServiceInfoCallback(serviceInfo, type)
+                } else {
+                    enqueueResolve(serviceInfo, type)
+                }
             }
 
             override fun onServiceLost(serviceInfo: NsdServiceInfo) {
+                unregisterServiceInfoCallback(type, serviceInfo)
                 removeEndpoint(type = type, name = serviceInfo.serviceName)
             }
 
@@ -106,43 +117,109 @@ class AndroidAdbMdnsDiscovery(
             pendingResolves.removeFirst()
         }
 
+        resolveLegacy(next.first, next.second)
+    }
+
+    private fun finishResolve() {
+        synchronized(lock) {
+            resolving = false
+        }
+        resolveNext()
+    }
+
+    @SuppressLint("NewApi")
+    private fun registerServiceInfoCallback(serviceInfo: NsdServiceInfo, type: AdbMdnsServiceType) {
+        val key = callbackKey(type, serviceInfo)
+        val callback = object : NsdManager.ServiceInfoCallback {
+            override fun onServiceInfoCallbackRegistrationFailed(errorCode: Int) {
+                unregisterServiceInfoCallback(key)
+            }
+
+            override fun onServiceUpdated(serviceInfo: NsdServiceInfo) {
+                addResolvedService(serviceInfo, type, serviceInfo.hostAddresses.firstOrNull()?.hostAddress.orEmpty())
+            }
+
+            override fun onServiceLost() {
+                unregisterServiceInfoCallback(key)
+                removeEndpoint(type = type, name = serviceInfo.serviceName)
+            }
+
+            override fun onServiceInfoCallbackUnregistered() = Unit
+        }
+
+        synchronized(lock) {
+            if (!active || serviceCallbacks.containsKey(key)) return
+            serviceCallbacks[key] = callback
+        }
+
+        runCatching {
+            nsdManager.registerServiceInfoCallback(serviceInfo, callbackExecutor, callback)
+        }.onFailure {
+            unregisterServiceInfoCallback(key)
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun resolveLegacy(serviceInfo: NsdServiceInfo, type: AdbMdnsServiceType) {
         runCatching {
             nsdManager.resolveService(
-                next.first,
+                serviceInfo,
                 object : NsdManager.ResolveListener {
                     override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-                        synchronized(lock) {
-                            resolving = false
-                        }
-                        resolveNext()
+                        finishResolve()
                     }
 
                     override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
-                        val host = serviceInfo.host?.hostAddress.orEmpty()
-                        val port = serviceInfo.port
-                        if (host.isNotBlank() && port in 1..65535) {
-                            addEndpoint(
-                                AdbMdnsEndpoint(
-                                    name = serviceInfo.serviceName.ifBlank { next.second.label },
-                                    host = host,
-                                    port = port,
-                                    type = next.second,
-                                ),
-                            )
-                        }
-                        synchronized(lock) {
-                            resolving = false
-                        }
-                        resolveNext()
+                        addResolvedService(serviceInfo, type, serviceInfo.host?.hostAddress.orEmpty())
+                        finishResolve()
                     }
                 },
             )
         }.onFailure {
-            synchronized(lock) {
-                resolving = false
-            }
-            resolveNext()
+            finishResolve()
         }
+    }
+
+    private fun addResolvedService(serviceInfo: NsdServiceInfo, type: AdbMdnsServiceType, host: String) {
+        val port = serviceInfo.port
+        if (host.isNotBlank() && port in 1..65535) {
+            addEndpoint(
+                AdbMdnsEndpoint(
+                    name = serviceInfo.serviceName.ifBlank { type.label },
+                    host = host,
+                    port = port,
+                    type = type,
+                ),
+            )
+        }
+    }
+
+    private fun stopServiceInfoCallbacks() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return
+        val callbacks = synchronized(lock) {
+            serviceCallbacks.values.toList().also { serviceCallbacks.clear() }
+        }
+        callbacks.forEach { callback ->
+            runCatching { nsdManager.unregisterServiceInfoCallback(callback) }
+        }
+    }
+
+    private fun unregisterServiceInfoCallback(type: AdbMdnsServiceType, serviceInfo: NsdServiceInfo) {
+        unregisterServiceInfoCallback(callbackKey(type, serviceInfo))
+    }
+
+    private fun unregisterServiceInfoCallback(key: String) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return
+        val callback = synchronized(lock) {
+            serviceCallbacks.remove(key)
+        }
+        if (callback != null) {
+            runCatching { nsdManager.unregisterServiceInfoCallback(callback) }
+        }
+    }
+
+    private fun callbackKey(type: AdbMdnsServiceType, serviceInfo: NsdServiceInfo): String {
+        return "${type.name}:${serviceInfo.serviceName}"
     }
 
     private fun addEndpoint(endpoint: AdbMdnsEndpoint) {
