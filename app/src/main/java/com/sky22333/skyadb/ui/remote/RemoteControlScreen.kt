@@ -16,14 +16,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.outlined.VolumeDown
+import androidx.compose.material.icons.automirrored.outlined.VolumeOff
+import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
+import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.PowerSettingsNew
-import androidx.compose.material.icons.outlined.VolumeDown
-import androidx.compose.material.icons.outlined.VolumeOff
-import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -101,29 +102,35 @@ private fun RemoteControlContent(
             verticalArrangement = Arrangement.spacedBy(AppDimens.SectionGap),
         ) {
             item { RemoteStatus(status = uiState.status) }
+
             item {
                 SectionHeader(title = "方向键", description = "适合电视、盒子和无触控设备")
             }
+
             item { DpadCard(onKeyClick = onKeyClick) }
+
             item { SectionHeader(title = "常用按键") }
+
             item {
                 KeyGrid(
                     keys = listOf(
                         KeyAction(RemoteKey.Back, Icons.AutoMirrored.Outlined.ArrowBack),
                         KeyAction(RemoteKey.Home, Icons.Outlined.Home),
-                        KeyAction(RemoteKey.Menu, Icons.Outlined.PlayArrow),
+                        KeyAction(RemoteKey.Menu, Icons.Outlined.Menu),
                         KeyAction(RemoteKey.Power, Icons.Outlined.PowerSettingsNew),
                     ),
                     onKeyClick = onKeyClick,
                 )
             }
+
             item { SectionHeader(title = "音量与媒体") }
+
             item {
                 KeyGrid(
                     keys = listOf(
-                        KeyAction(RemoteKey.VolumeDown, Icons.Outlined.VolumeDown),
-                        KeyAction(RemoteKey.VolumeUp, Icons.Outlined.VolumeUp),
-                        KeyAction(RemoteKey.Mute, Icons.Outlined.VolumeOff),
+                        KeyAction(RemoteKey.VolumeDown, Icons.AutoMirrored.Outlined.VolumeDown),
+                        KeyAction(RemoteKey.VolumeUp, Icons.AutoMirrored.Outlined.VolumeUp),
+                        KeyAction(RemoteKey.Mute, Icons.AutoMirrored.Outlined.VolumeOff),
                         KeyAction(RemoteKey.PlayPause, Icons.Outlined.PlayArrow),
                         KeyAction(RemoteKey.Previous, Icons.AutoMirrored.Outlined.KeyboardArrowLeft),
                         KeyAction(RemoteKey.Next, Icons.AutoMirrored.Outlined.KeyboardArrowRight),
@@ -131,7 +138,9 @@ private fun RemoteControlContent(
                     onKeyClick = onKeyClick,
                 )
             }
+
             item { SectionHeader(title = "电源") }
+
             item {
                 KeyGrid(
                     keys = listOf(
@@ -150,7 +159,9 @@ private fun DpadCard(onKeyClick: (RemoteKey) -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(AppDimens.CardRadius),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
     ) {
         Column(
             modifier = Modifier.padding(AppDimens.CardPadding),
@@ -158,20 +169,41 @@ private fun DpadCard(onKeyClick: (RemoteKey) -> Unit) {
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             RemoteIconButton(RemoteKey.Up, Icons.Outlined.KeyboardArrowUp, onKeyClick)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                RemoteIconButton(RemoteKey.Left, Icons.AutoMirrored.Outlined.KeyboardArrowLeft, onKeyClick)
-                Button(onClick = { onKeyClick(RemoteKey.Center) }, modifier = Modifier.size(76.dp)) {
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RemoteIconButton(
+                    key = RemoteKey.Left,
+                    icon = Icons.AutoMirrored.Outlined.KeyboardArrowLeft,
+                    onKeyClick = onKeyClick,
+                )
+
+                Button(
+                    onClick = { onKeyClick(RemoteKey.Center) },
+                    modifier = Modifier.size(76.dp),
+                ) {
                     Text(RemoteKey.Center.label)
                 }
-                RemoteIconButton(RemoteKey.Right, Icons.AutoMirrored.Outlined.KeyboardArrowRight, onKeyClick)
+
+                RemoteIconButton(
+                    key = RemoteKey.Right,
+                    icon = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                    onKeyClick = onKeyClick,
+                )
             }
+
             RemoteIconButton(RemoteKey.Down, Icons.Outlined.KeyboardArrowDown, onKeyClick)
         }
     }
 }
 
 @Composable
-private fun KeyGrid(keys: List<KeyAction>, onKeyClick: (RemoteKey) -> Unit) {
+private fun KeyGrid(
+    keys: List<KeyAction>,
+    onKeyClick: (RemoteKey) -> Unit,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         keys.chunked(2).forEach { row ->
             Row(
@@ -183,11 +215,16 @@ private fun KeyGrid(keys: List<KeyAction>, onKeyClick: (RemoteKey) -> Unit) {
                         onClick = { onKeyClick(action.key) },
                         modifier = Modifier.weight(1f),
                     ) {
-                        Icon(action.icon, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(
+                            imageVector = action.icon,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(action.key.label)
                     }
                 }
+
                 if (row.size == 1) {
                     Spacer(modifier = Modifier.weight(1f))
                 }
@@ -197,8 +234,15 @@ private fun KeyGrid(keys: List<KeyAction>, onKeyClick: (RemoteKey) -> Unit) {
 }
 
 @Composable
-private fun RemoteIconButton(key: RemoteKey, icon: ImageVector, onKeyClick: (RemoteKey) -> Unit) {
-    OutlinedButton(onClick = { onKeyClick(key) }, modifier = Modifier.size(76.dp)) {
+private fun RemoteIconButton(
+    key: RemoteKey,
+    icon: ImageVector,
+    onKeyClick: (RemoteKey) -> Unit,
+) {
+    OutlinedButton(
+        onClick = { onKeyClick(key) },
+        modifier = Modifier.size(76.dp),
+    ) {
         Icon(icon, contentDescription = key.label)
     }
 }
@@ -207,13 +251,28 @@ private fun RemoteIconButton(key: RemoteKey, icon: ImageVector, onKeyClick: (Rem
 private fun RemoteStatus(status: OperationStatus) {
     when (status) {
         OperationStatus.Idle -> Unit
-        is OperationStatus.Running -> Text(status.text, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        is OperationStatus.Success -> Text(status.text, color = MaterialTheme.colorScheme.primary)
-        is OperationStatus.Failed -> Text("${status.text}：${status.suggestion}", color = MaterialTheme.colorScheme.error)
+
+        is OperationStatus.Running -> Text(
+            text = status.text,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        is OperationStatus.Success -> Text(
+            text = status.text,
+            color = MaterialTheme.colorScheme.primary,
+        )
+
+        is OperationStatus.Failed -> Text(
+            text = "${status.text}：${status.suggestion}",
+            color = MaterialTheme.colorScheme.error,
+        )
     }
 }
 
-private data class KeyAction(val key: RemoteKey, val icon: ImageVector)
+private data class KeyAction(
+    val key: RemoteKey,
+    val icon: ImageVector,
+)
 
 @Preview(name = "虚拟遥控器", showBackground = true, widthDp = 390)
 @Composable
