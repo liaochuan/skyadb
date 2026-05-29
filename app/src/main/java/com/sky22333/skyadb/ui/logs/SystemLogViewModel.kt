@@ -34,7 +34,7 @@ data class SystemLogUiState(
 
 const val LogLevelAll = "全部"
 val LogLineLimits = listOf(100, 300, 1000)
-val LogLevels = listOf(LogLevelAll, "E", "W", "I", "D", "V")
+val LogLevels = listOf(LogLevelAll, "E", "W", "I")
 
 class SystemLogViewModel(
     private val adbRepository: AdbRepository = AppServices.adbRepository,
@@ -55,17 +55,25 @@ class SystemLogViewModel(
     }
 
     fun clearLogs() {
-        state.value = state.value.copy(logs = emptyList(), status = OperationStatus.Idle)
+        state.value = state.value.copy(
+            logs = emptyList(),
+            loading = false,
+            status = OperationStatus.Idle,
+        )
     }
 
     fun loadLogs() {
+        if (state.value.loading) return
+
         val limit = state.value.lineLimit.coerceIn(MinLines, MaxLines)
+
         state.value = state.value.copy(
             loading = true,
             status = OperationStatus.Running("正在读取最近 $limit 行日志"),
         )
+
         viewModelScope.launch {
-            when (val result = adbRepository.runShell("logcat -d -t $limit")) {
+            val newState = when (val result = adbRepository.runShell("logcat -d -t $limit")) {
                 is AdbOperationResult.Success -> {
                     if (result.data.exitCode == 0) {
                         val lines = result.data.output
@@ -74,28 +82,37 @@ class SystemLogViewModel(
                             .filter { it.isNotBlank() }
                             .toList()
                             .takeLast(MaxLines)
-                        state.value = state.value.copy(
+
+                        state.value.copy(
                             logs = lines,
                             loading = false,
                             status = OperationStatus.Success("已读取 ${lines.size} 行日志"),
                         )
                     } else {
-                        state.value = state.value.copy(
+                        state.value.copy(
                             loading = false,
                             status = OperationStatus.Failed(
                                 text = "读取日志失败",
-                                suggestion = result.data.errorOutput.ifBlank { "请确认目标设备允许读取 logcat。" },
+                                suggestion = result.data.errorOutput.ifBlank {
+                                    "请确认目标设备允许读取 logcat。"
+                                },
                             ),
                         )
                     }
                 }
+
                 is AdbOperationResult.Failure -> {
-                    state.value = state.value.copy(
+                    state.value.copy(
                         loading = false,
-                        status = OperationStatus.Failed(result.message, result.suggestion),
+                        status = OperationStatus.Failed(
+                            text = result.message,
+                            suggestion = result.suggestion,
+                        ),
                     )
                 }
             }
+
+            state.value = newState
         }
     }
 

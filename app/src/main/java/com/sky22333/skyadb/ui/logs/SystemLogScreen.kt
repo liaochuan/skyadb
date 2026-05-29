@@ -1,10 +1,12 @@
 package com.sky22333.skyadb.ui.logs
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -14,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.Card
@@ -31,6 +34,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -50,6 +56,8 @@ fun SystemLogScreen(
     viewModel: SystemLogViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
 
     SystemLogContent(
         bottomPadding = bottomPadding,
@@ -57,6 +65,10 @@ fun SystemLogScreen(
         onBackClick = onBackClick,
         onRefreshClick = viewModel::loadLogs,
         onClearClick = viewModel::clearLogs,
+        onCopyClick = {
+            clipboardManager.setText(AnnotatedString(buildLogCopyText(uiState)))
+            Toast.makeText(context, "已复制当前日志", Toast.LENGTH_SHORT).show()
+        },
         onQueryChanged = viewModel::onQueryChanged,
         onLevelSelected = viewModel::onLevelSelected,
         onLineLimitSelected = viewModel::onLineLimitSelected,
@@ -70,6 +82,7 @@ private fun SystemLogContent(
     onBackClick: () -> Unit,
     onRefreshClick: () -> Unit,
     onClearClick: () -> Unit,
+    onCopyClick: () -> Unit,
     onQueryChanged: (String) -> Unit,
     onLevelSelected: (String) -> Unit,
     onLineLimitSelected: (Int) -> Unit,
@@ -92,6 +105,12 @@ private fun SystemLogContent(
                 }
             },
             actions = {
+                IconButton(
+                    onClick = onCopyClick,
+                    enabled = uiState.filteredLogs.isNotEmpty(),
+                ) {
+                    Icon(Icons.Outlined.ContentCopy, contentDescription = "复制日志")
+                }
                 IconButton(onClick = onClearClick, enabled = uiState.logs.isNotEmpty()) {
                     Icon(Icons.Outlined.DeleteSweep, contentDescription = "清空日志")
                 }
@@ -134,7 +153,7 @@ private fun SystemLogContent(
                     )
                 }
             } else {
-                items(uiState.filteredLogs.takeLast(1000)) { line ->
+                items(uiState.filteredLogs.takeLast(MaxDisplayLogs)) { line ->
                     LogLine(line = line)
                 }
             }
@@ -142,7 +161,7 @@ private fun SystemLogContent(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun LogFilterCard(
     uiState: SystemLogUiState,
@@ -166,7 +185,11 @@ private fun LogFilterCard(
                 label = { Text("关键词") },
                 singleLine = true,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 LogLineLimits.forEach { limit ->
                     FilterChip(
                         selected = uiState.lineLimit == limit,
@@ -175,7 +198,11 @@ private fun LogFilterCard(
                     )
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 LogLevels.forEach { level ->
                     FilterChip(
                         selected = uiState.level == level,
@@ -211,14 +238,28 @@ private fun LogLine(line: String) {
 private fun LogStatus(status: OperationStatus, loading: Boolean) {
     when (status) {
         OperationStatus.Idle -> Unit
+
         is OperationStatus.Running -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             Text(status.text, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+
         is OperationStatus.Success -> Text(status.text, color = MaterialTheme.colorScheme.primary)
-        is OperationStatus.Failed -> Text("${status.text}：${status.suggestion}", color = MaterialTheme.colorScheme.error)
+
+        is OperationStatus.Failed -> Text(
+            text = "${status.text}：${status.suggestion}",
+            color = MaterialTheme.colorScheme.error,
+        )
     }
 }
+
+private fun buildLogCopyText(uiState: SystemLogUiState): String {
+    return uiState.filteredLogs
+        .takeLast(MaxDisplayLogs)
+        .joinToString(separator = "\n")
+}
+
+private const val MaxDisplayLogs = 1000
 
 @Preview(name = "系统日志", showBackground = true, widthDp = 390)
 @Composable
@@ -234,6 +275,7 @@ private fun SystemLogContentPreview() {
             onBackClick = {},
             onRefreshClick = {},
             onClearClick = {},
+            onCopyClick = {},
             onQueryChanged = {},
             onLevelSelected = {},
             onLineLimitSelected = {},
