@@ -37,7 +37,9 @@ import com.sky22333.skyadb.ui.files.FileTransferScreen
 import com.sky22333.skyadb.ui.home.HomeScreen
 import com.sky22333.skyadb.ui.install.InstallApkScreen
 import com.sky22333.skyadb.ui.localapps.LocalAppsScreen
+import com.sky22333.skyadb.ui.logs.SystemLogScreen
 import com.sky22333.skyadb.ui.pairing.PairingScreen
+import com.sky22333.skyadb.ui.remote.RemoteControlScreen
 import com.sky22333.skyadb.ui.screenshot.ScreenshotScreen
 import com.sky22333.skyadb.ui.settings.SettingsScreen
 import com.sky22333.skyadb.ui.shell.ShellScreen
@@ -144,6 +146,8 @@ fun AdbManagerApp() {
                     onFilesClick = { navController.navigate(AppDestination.Files.route) },
                     onScreenshotClick = { navController.navigate(AppDestination.Screenshot.route) },
                     onShellClick = { navController.navigate(AppDestination.Shell.route) },
+                    onRemoteClick = { navController.navigate(RemoteRoute) },
+                    onLogsClick = { navController.navigate(LogsRoute) },
                 )
             }
             composable(AppDestination.Settings.route) { SettingsScreen(bottomPadding = bottomPadding) }
@@ -207,6 +211,12 @@ fun AdbManagerApp() {
             composable(AppDestination.Screenshot.route) {
                 ScreenshotScreen(bottomPadding = bottomPadding, onBackClick = { navController.popBackStack() })
             }
+            composable(RemoteRoute) {
+                RemoteControlScreen(bottomPadding = bottomPadding, onBackClick = { navController.popBackStack() })
+            }
+            composable(LogsRoute) {
+                SystemLogScreen(bottomPadding = bottomPadding, onBackClick = { navController.popBackStack() })
+            }
         }
     }
 }
@@ -240,3 +250,5 @@ private const val DiscoveryHostKey = "discovery_host"
 private const val DiscoveryPortKey = "discovery_port"
 private const val PairingHostKey = "pairing_host"
 private const val PairingPortKey = "pairing_port"
+private const val RemoteRoute = "remote"
+private const val LogsRoute = "logs"

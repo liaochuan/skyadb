@@ -40,6 +40,7 @@ class ScreenshotViewModel(
         viewModelScope.launch {
             when (val result = adbRepository.captureScreenshot(localFile)) {
                 is AdbOperationResult.Success -> {
+                    latestFile?.takeIf { it.absolutePath != result.data.absolutePath }?.delete()
                     latestFile = result.data
                     state.value = state.value.copy(
                         latestFileName = result.data.name,
@@ -88,5 +89,11 @@ class ScreenshotViewModel(
                 },
             )
         }
+    }
+
+    fun clearPreview() {
+        latestFile?.delete()
+        latestFile = null
+        state.value = ScreenshotUiState()
     }
 }

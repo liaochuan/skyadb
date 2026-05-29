@@ -57,6 +57,8 @@ fun DeviceScreen(
     onFilesClick: () -> Unit = {},
     onScreenshotClick: () -> Unit = {},
     onShellClick: () -> Unit = {},
+    onRemoteClick: () -> Unit = {},
+    onLogsClick: () -> Unit = {},
     viewModel: DeviceViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -71,6 +73,8 @@ fun DeviceScreen(
         onFilesClick = onFilesClick,
         onScreenshotClick = onScreenshotClick,
         onShellClick = onShellClick,
+        onRemoteClick = onRemoteClick,
+        onLogsClick = onLogsClick,
         onRefreshClick = viewModel::refreshDeviceInfo,
         onToggleInfoClick = viewModel::toggleInfoExpanded,
     )
@@ -88,6 +92,8 @@ private fun DeviceContent(
     onFilesClick: () -> Unit,
     onScreenshotClick: () -> Unit,
     onShellClick: () -> Unit,
+    onRemoteClick: () -> Unit,
+    onLogsClick: () -> Unit,
     onRefreshClick: () -> Unit,
     onToggleInfoClick: () -> Unit,
 ) {
@@ -170,6 +176,8 @@ private fun DeviceContent(
                     onFilesClick = onFilesClick,
                     onScreenshotClick = onScreenshotClick,
                     onShellClick = onShellClick,
+                    onRemoteClick = onRemoteClick,
+                    onLogsClick = onLogsClick,
                 )
             }
 
@@ -276,6 +284,8 @@ private fun QuickActionGrid(
     onFilesClick: () -> Unit,
     onScreenshotClick: () -> Unit,
     onShellClick: () -> Unit,
+    onRemoteClick: () -> Unit,
+    onLogsClick: () -> Unit,
 ) {
     val actions = listOf(
         "应用管理" to Icons.Outlined.Apps,
@@ -284,6 +294,8 @@ private fun QuickActionGrid(
         "在线下载" to Icons.Outlined.Download,
         "文件管理" to Icons.Outlined.FolderOpen,
         "Shell" to Icons.Outlined.Code,
+        "遥控器" to Icons.Outlined.Android,
+        "系统日志" to Icons.Outlined.Code,
         "截图" to Icons.Outlined.PhotoCamera,
     )
 
@@ -299,6 +311,8 @@ private fun QuickActionGrid(
                     "在线下载" -> onDownloadClick
                     "文件管理" -> onFilesClick
                     "Shell" -> onShellClick
+                    "遥控器" -> onRemoteClick
+                    "系统日志" -> onLogsClick
                     "截图" -> onScreenshotClick
                     else -> ({})
                 },
@@ -346,6 +360,8 @@ private fun DeviceContentDisconnectedPreview() {
             onFilesClick = {},
             onScreenshotClick = {},
             onShellClick = {},
+            onRemoteClick = {},
+            onLogsClick = {},
             onRefreshClick = {},
             onToggleInfoClick = {},
         )
@@ -377,6 +393,8 @@ private fun DeviceContentConnectedPreview() {
             onFilesClick = {},
             onScreenshotClick = {},
             onShellClick = {},
+            onRemoteClick = {},
+            onLogsClick = {},
             onRefreshClick = {},
             onToggleInfoClick = {},
         )

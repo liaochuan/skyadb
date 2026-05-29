@@ -2,6 +2,8 @@ package com.sky22333.skyadb.ui.screenshot
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material3.Button
@@ -31,7 +34,11 @@ import com.sky22333.skyadb.ui.components.AppTopBar as TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
@@ -60,6 +67,7 @@ fun ScreenshotScreen(
         onBackClick = onBackClick,
         onCaptureClick = { viewModel.capture(context) },
         onSaveClick = { saveLauncher.launch(uiState.latestFileName ?: "screenshot.png") },
+        onClearClick = viewModel::clearPreview,
     )
 }
 
@@ -71,7 +79,12 @@ private fun ScreenshotContent(
     onBackClick: () -> Unit,
     onCaptureClick: () -> Unit,
     onSaveClick: () -> Unit,
+    onClearClick: () -> Unit,
 ) {
+    val preview = remember(uiState.latestLocalPath) {
+        decodePreviewImage(uiState.latestLocalPath)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -82,7 +95,7 @@ private fun ScreenshotContent(
                 Column {
                     Text("设备截图")
                     Text(
-                        "截取已连接设备屏幕并保存到本机",
+                        "截图先显示预览，需要时再保存",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -121,11 +134,7 @@ private fun ScreenshotContent(
                         style = MaterialTheme.typography.titleMedium,
                     )
                     if (uiState.latestLocalPath != null) {
-                        Text(
-                            text = uiState.latestLocalPath,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
+                        ScreenshotPreview(preview = preview)
                     }
                     ScreenshotStatus(status = uiState.operationStatus)
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -143,6 +152,15 @@ private fun ScreenshotContent(
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("保存")
                         }
+                    }
+                    OutlinedButton(
+                        onClick = onClearClick,
+                        enabled = uiState.latestLocalPath != null,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(imageVector = Icons.Outlined.DeleteSweep, contentDescription = null)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("清除预览")
                     }
                 }
             }
@@ -180,6 +198,47 @@ private fun ScreenshotContentPreview() {
             onBackClick = {},
             onCaptureClick = {},
             onSaveClick = {},
+            onClearClick = {},
         )
     }
 }
+
+@Composable
+private fun ScreenshotPreview(preview: ImageBitmap?) {
+    if (preview == null) {
+        Text(
+            text = "预览加载失败",
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodySmall,
+        )
+        return
+    }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(AppDimens.CardRadius),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
+        Image(
+            bitmap = preview,
+            contentDescription = "截图预览",
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            contentScale = ContentScale.FillWidth,
+        )
+    }
+}
+
+private fun decodePreviewImage(path: String?): ImageBitmap? {
+    if (path.isNullOrBlank()) return null
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(path, bounds)
+    var sampleSize = 1
+    while (bounds.outWidth / sampleSize > PreviewMaxSize || bounds.outHeight / sampleSize > PreviewMaxSize) {
+        sampleSize *= 2
+    }
+    val options = BitmapFactory.Options().apply { inSampleSize = sampleSize.coerceAtLeast(1) }
+    return BitmapFactory.decodeFile(path, options)?.asImageBitmap()
+}
+
+private const val PreviewMaxSize = 1600

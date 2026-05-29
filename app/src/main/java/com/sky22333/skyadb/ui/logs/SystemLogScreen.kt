@@ -1,0 +1,242 @@
+package com.sky22333.skyadb.ui.logs
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.DeleteSweep
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import com.sky22333.skyadb.ui.components.AppTopBar as TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.sky22333.skyadb.model.OperationStatus
+import com.sky22333.skyadb.ui.components.EmptyState
+import com.sky22333.skyadb.ui.components.SectionHeader
+import com.sky22333.skyadb.ui.theme.AdbManagerTheme
+import com.sky22333.skyadb.ui.theme.AppDimens
+
+@Composable
+fun SystemLogScreen(
+    bottomPadding: Dp = 0.dp,
+    onBackClick: () -> Unit,
+    viewModel: SystemLogViewModel = viewModel(),
+) {
+    val uiState by viewModel.uiState.collectAsState()
+
+    SystemLogContent(
+        bottomPadding = bottomPadding,
+        uiState = uiState,
+        onBackClick = onBackClick,
+        onRefreshClick = viewModel::loadLogs,
+        onClearClick = viewModel::clearLogs,
+        onQueryChanged = viewModel::onQueryChanged,
+        onLevelSelected = viewModel::onLevelSelected,
+        onLineLimitSelected = viewModel::onLineLimitSelected,
+    )
+}
+
+@Composable
+private fun SystemLogContent(
+    bottomPadding: Dp = 0.dp,
+    uiState: SystemLogUiState,
+    onBackClick: () -> Unit,
+    onRefreshClick: () -> Unit,
+    onClearClick: () -> Unit,
+    onQueryChanged: (String) -> Unit,
+    onLevelSelected: (String) -> Unit,
+    onLineLimitSelected: (Int) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        TopAppBar(
+            title = {
+                Column {
+                    Text("系统日志")
+                    Text(
+                        "按需读取目标设备最近日志",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            },
+            navigationIcon = {
+                IconButton(onClick = onBackClick) {
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回")
+                }
+            },
+            actions = {
+                IconButton(onClick = onClearClick, enabled = uiState.logs.isNotEmpty()) {
+                    Icon(Icons.Outlined.DeleteSweep, contentDescription = "清空日志")
+                }
+                IconButton(onClick = onRefreshClick, enabled = !uiState.loading) {
+                    Icon(Icons.Outlined.Refresh, contentDescription = "刷新日志")
+                }
+            },
+        )
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = AppDimens.ScreenPadding,
+                top = AppDimens.ScreenPadding,
+                end = AppDimens.ScreenPadding,
+                bottom = AppDimens.ScreenPadding + bottomPadding,
+            ),
+            verticalArrangement = Arrangement.spacedBy(AppDimens.SectionGap),
+        ) {
+            item {
+                LogFilterCard(
+                    uiState = uiState,
+                    onQueryChanged = onQueryChanged,
+                    onLevelSelected = onLevelSelected,
+                    onLineLimitSelected = onLineLimitSelected,
+                )
+            }
+            item { LogStatus(uiState.status, uiState.loading) }
+            item {
+                SectionHeader(
+                    title = "日志内容",
+                    description = "显示 ${uiState.filteredLogs.size} / ${uiState.logs.size} 行",
+                )
+            }
+            if (uiState.filteredLogs.isEmpty()) {
+                item {
+                    EmptyState(
+                        title = "暂无日志",
+                        message = "点击右上角刷新读取最近日志。",
+                    )
+                }
+            } else {
+                items(uiState.filteredLogs.takeLast(1000)) { line ->
+                    LogLine(line = line)
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LogFilterCard(
+    uiState: SystemLogUiState,
+    onQueryChanged: (String) -> Unit,
+    onLevelSelected: (String) -> Unit,
+    onLineLimitSelected: (Int) -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(AppDimens.CardRadius),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+    ) {
+        Column(
+            modifier = Modifier.padding(AppDimens.CardPadding),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            OutlinedTextField(
+                value = uiState.query,
+                onValueChange = onQueryChanged,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("关键词") },
+                singleLine = true,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                LogLineLimits.forEach { limit ->
+                    FilterChip(
+                        selected = uiState.lineLimit == limit,
+                        onClick = { onLineLimitSelected(limit) },
+                        label = { Text("$limit") },
+                    )
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                LogLevels.forEach { level ->
+                    FilterChip(
+                        selected = uiState.level == level,
+                        onClick = { onLevelSelected(level) },
+                        label = { Text(level) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LogLine(line: String) {
+    Text(
+        text = line,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 28.dp)
+            .background(
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                shape = RoundedCornerShape(6.dp),
+            )
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        color = MaterialTheme.colorScheme.onSurface,
+        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+        maxLines = 3,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+@Composable
+private fun LogStatus(status: OperationStatus, loading: Boolean) {
+    when (status) {
+        OperationStatus.Idle -> Unit
+        is OperationStatus.Running -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            Text(status.text, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        is OperationStatus.Success -> Text(status.text, color = MaterialTheme.colorScheme.primary)
+        is OperationStatus.Failed -> Text("${status.text}：${status.suggestion}", color = MaterialTheme.colorScheme.error)
+    }
+}
+
+@Preview(name = "系统日志", showBackground = true, widthDp = 390)
+@Composable
+private fun SystemLogContentPreview() {
+    AdbManagerTheme(dynamicColor = false) {
+        SystemLogContent(
+            uiState = SystemLogUiState(
+                logs = listOf(
+                    "05-29 17:32:08.000 1234 1234 I ActivityTaskManager: Displayed com.example/.MainActivity",
+                    "05-29 17:32:09.000 1234 1234 W PackageManager: Slow operation",
+                ),
+            ),
+            onBackClick = {},
+            onRefreshClick = {},
+            onClearClick = {},
+            onQueryChanged = {},
+            onLevelSelected = {},
+            onLineLimitSelected = {},
+        )
+    }
+}
