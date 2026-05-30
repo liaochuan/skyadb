@@ -1,5 +1,11 @@
 # sky adb
 
+<p align="center">
+  <img src="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
+       alt="demo1"
+       width="200">
+</p>
+
 sky adb 是一款运行在 Android 手机上的 ADB 管理工具，用于通过 WiFi ADB / Wireless Debugging 管理手机、平板、电视和盒子。
 
 ## 功能特性
