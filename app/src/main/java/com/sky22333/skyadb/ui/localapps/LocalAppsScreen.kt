@@ -1,5 +1,7 @@
 package com.sky22333.skyadb.ui.localapps
 
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -34,8 +36,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -49,6 +55,8 @@ import com.sky22333.skyadb.ui.components.SectionHeader
 import com.sky22333.skyadb.ui.theme.AdbManagerTheme
 import com.sky22333.skyadb.ui.theme.AppDimens
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun LocalAppsScreen(
@@ -180,18 +188,7 @@ private fun LocalAppCard(
                 shape = RoundedCornerShape(8.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
             ) {
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Android,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                }
+                LocalAppIcon(app = app)
             }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
@@ -233,6 +230,37 @@ private fun LocalAppCard(
                     Text("安装")
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun LocalAppIcon(app: LocalInstalledApp) {
+    val bitmap by produceState<ImageBitmap?>(initialValue = null, key1 = app.iconPath) {
+        value = withContext(Dispatchers.IO) {
+            BitmapFactory.decodeFile(app.iconPath)?.asImageBitmap()
+        }
+    }
+    val icon = bitmap
+    if (icon != null) {
+        Image(
+            bitmap = icon,
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
+        )
+    } else {
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Android,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
         }
     }
 }

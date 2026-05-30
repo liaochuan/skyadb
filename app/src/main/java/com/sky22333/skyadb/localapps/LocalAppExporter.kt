@@ -4,6 +4,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.os.Build
 import java.io.File
 import java.io.FileInputStream
@@ -31,6 +35,7 @@ class LocalAppExporter(
                     versionName = versionName(appInfo.packageName),
                     isSingleApk = splitCount == 0 && sourceFile.extension.equals("apk", ignoreCase = true),
                     apkSizeBytes = sourceFile.takeIf { it.isFile && it.canRead() }?.length() ?: 0L,
+                    iconPath = iconPath(appInfo),
                 )
             }
             .sortedWith(compareBy<LocalInstalledApp> { !it.installable }.thenBy { it.label.lowercase(Locale.ROOT) })
@@ -90,6 +95,32 @@ class LocalAppExporter(
         }.getOrNull().orEmpty()
     }
 
+    private fun iconPath(appInfo: ApplicationInfo): String {
+        val target = File(context.cacheDir, "local-app-icons/${appInfo.packageName}.png")
+        if (!target.isFile) {
+            appInfo.loadIcon(packageManager).toBitmap().saveAsPng(target)
+        }
+        return target.absolutePath
+    }
+
+    private fun Drawable.toBitmap(): Bitmap {
+        if (this is BitmapDrawable && bitmap != null) {
+            return Bitmap.createScaledBitmap(bitmap, IconSize, IconSize, true)
+        }
+        return Bitmap.createBitmap(IconSize, IconSize, Bitmap.Config.ARGB_8888).also { bitmap ->
+            val canvas = Canvas(bitmap)
+            setBounds(0, 0, canvas.width, canvas.height)
+            draw(canvas)
+        }
+    }
+
+    private fun Bitmap.saveAsPng(file: File) {
+        file.parentFile?.mkdirs()
+        file.outputStream().use { output ->
+            compress(Bitmap.CompressFormat.PNG, 100, output)
+        }
+    }
+
     private fun ApplicationInfo.isUserApp(): Boolean {
         val systemFlags = ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP
         return flags and systemFlags == 0 && packageName != context.packageName
@@ -99,5 +130,9 @@ class LocalAppExporter(
         targetDir.listFiles()
             ?.filter { it.isFile && it.extension.equals("apk", ignoreCase = true) }
             ?.forEach { file -> runCatching { file.delete() } }
+    }
+
+    private companion object {
+        const val IconSize = 96
     }
 }
