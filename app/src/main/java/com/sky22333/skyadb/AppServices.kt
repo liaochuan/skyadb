@@ -2,6 +2,7 @@ package com.sky22333.skyadb
 
 import android.content.Context
 import com.sky22333.skyadb.adb.KadbManager
+import com.sky22333.skyadb.apps.AppMetadataLoader
 import com.sky22333.skyadb.data.AppSettingsStore
 import com.sky22333.skyadb.data.RecentDeviceStore
 import com.sky22333.skyadb.discovery.AndroidAdbMdnsDiscovery
@@ -17,6 +18,9 @@ object AppServices {
     private var appContext: Context? = null
 
     val kadbManager: KadbManager by lazy { KadbManager() }
+    val appMetadataLoader: AppMetadataLoader by lazy {
+        AppMetadataLoader(requireNotNull(appContext) { "AppServices 尚未初始化 Context" })
+    }
     val downloadManager: NetworkDownloadManager by lazy { NetworkDownloadManager(appContext) }
     val localFileManager: LocalFileManager by lazy {
         LocalFileManager(requireNotNull(appContext) { "AppServices 尚未初始化 Context" })

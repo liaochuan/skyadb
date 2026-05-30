@@ -32,6 +32,7 @@ interface AdbRepository {
     suspend fun listApps(): AdbOperationResult<List<AppInfo>>
     suspend fun launchApp(packageName: String): AdbOperationResult<Unit>
     suspend fun forceStopApp(packageName: String): AdbOperationResult<Unit>
+    suspend fun setAppEnabled(packageName: String, enabled: Boolean): AdbOperationResult<Unit>
     suspend fun uninstall(packageName: String): AdbOperationResult<Unit>
     suspend fun listFiles(remotePath: String): AdbOperationResult<List<RemoteFileEntry>>
     suspend fun makeDirectory(remotePath: String): AdbOperationResult<Unit>
@@ -144,6 +145,10 @@ class DefaultAdbRepository(
 
     override suspend fun forceStopApp(packageName: String): AdbOperationResult<Unit> {
         return kadbManager.forceStopApp(packageName)
+    }
+
+    override suspend fun setAppEnabled(packageName: String, enabled: Boolean): AdbOperationResult<Unit> {
+        return kadbManager.setAppEnabled(packageName, enabled)
     }
 
     override suspend fun uninstall(packageName: String): AdbOperationResult<Unit> {

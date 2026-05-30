@@ -1,5 +1,7 @@
 package com.sky22333.skyadb.ui.apps
 
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,24 +43,32 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.sky22333.skyadb.ui.components.AppTopBar as TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.sky22333.skyadb.apps.AppMetadata
 import com.sky22333.skyadb.model.AppInfo
 import com.sky22333.skyadb.model.OperationStatus
 import com.sky22333.skyadb.ui.components.EmptyState
 import com.sky22333.skyadb.ui.components.SectionHeader
 import com.sky22333.skyadb.ui.theme.AdbManagerTheme
 import com.sky22333.skyadb.ui.theme.AppDimens
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun AppsScreen(
@@ -81,6 +91,9 @@ fun AppsScreen(
         onRefreshClick = { viewModel.loadApps(force = true) },
         onLaunchClick = viewModel::launchApp,
         onStopClick = viewModel::forceStopApp,
+        onSetEnabledClick = viewModel::setAppEnabled,
+        onAppVisible = viewModel::loadAppMetadata,
+        onAppHidden = viewModel::cancelAppMetadataLoad,
         onUninstallClick = viewModel::uninstallApp,
         onCancelPendingAction = viewModel::cancelPendingAction,
         onConfirmPendingAction = viewModel::confirmPendingAction,
@@ -98,6 +111,9 @@ private fun AppsContent(
     onRefreshClick: () -> Unit,
     onLaunchClick: (String) -> Unit,
     onStopClick: (String) -> Unit,
+    onSetEnabledClick: (AppInfo, Boolean) -> Unit,
+    onAppVisible: (AppInfo) -> Unit,
+    onAppHidden: (String) -> Unit,
     onUninstallClick: (String) -> Unit,
     onCancelPendingAction: () -> Unit,
     onConfirmPendingAction: () -> Unit,
@@ -179,8 +195,12 @@ private fun AppsContent(
                 ) { app ->
                     AppItemCard(
                         app = app,
+                        metadata = uiState.appMetadata[app.packageName],
                         onLaunchClick = onLaunchClick,
                         onStopClick = onStopClick,
+                        onSetEnabledClick = onSetEnabledClick,
+                        onAppVisible = onAppVisible,
+                        onAppHidden = onAppHidden,
                         onUninstallClick = onUninstallClick,
                     )
                 }
@@ -225,8 +245,18 @@ private fun PendingActionCard(
 ) {
     if (pendingAction == null) return
 
-    val title = "确认卸载应用？"
-    val message = "将从目标设备卸载 ${pendingAction.packageName}。"
+    val title = when (pendingAction) {
+        is AppPendingAction.Uninstall -> "确认卸载应用？"
+        is AppPendingAction.SetEnabled -> if (pendingAction.enabled) "确认启用应用？" else "确认冻结应用？"
+    }
+    val message = when (pendingAction) {
+        is AppPendingAction.Uninstall -> "将从目标设备卸载 ${pendingAction.packageName}。"
+        is AppPendingAction.SetEnabled -> when {
+            pendingAction.enabled -> "将恢复 ${pendingAction.packageName} 的可用状态。"
+            pendingAction.isSystem -> "冻结系统应用可能影响桌面、设置或播放功能。"
+            else -> "冻结后 ${pendingAction.packageName} 将无法启动。"
+        }
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -266,10 +296,21 @@ private fun PendingActionCard(
 @Composable
 private fun AppItemCard(
     app: AppInfo,
+    metadata: AppMetadata?,
     onLaunchClick: (String) -> Unit,
     onStopClick: (String) -> Unit,
+    onSetEnabledClick: (AppInfo, Boolean) -> Unit,
+    onAppVisible: (AppInfo) -> Unit,
+    onAppHidden: (String) -> Unit,
     onUninstallClick: (String) -> Unit,
 ) {
+    LaunchedEffect(app.packageName, app.sourcePath) {
+        onAppVisible(app)
+    }
+    DisposableEffect(app.packageName) {
+        onDispose { onAppHidden(app.packageName) }
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(AppDimens.CardRadius),
@@ -283,9 +324,13 @@ private fun AppItemCard(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AppIconPlaceholder(app = app)
+            AppIconPlaceholder(app = app, iconPath = metadata?.iconPath)
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = app.label, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = metadata?.label?.takeIf { it.isNotBlank() } ?: app.label,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                )
                 Text(
                     text = app.packageName,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -295,12 +340,13 @@ private fun AppItemCard(
             }
             AssistChip(
                 onClick = {},
-                label = { Text(if (app.isSystem) "系统" else "用户") },
+                label = { Text(app.statusLabel) },
             )
             AppActionMenu(
-                packageName = app.packageName,
+                app = app,
                 onLaunchClick = onLaunchClick,
                 onStopClick = onStopClick,
+                onSetEnabledClick = onSetEnabledClick,
                 onUninstallClick = onUninstallClick,
             )
         }
@@ -308,7 +354,12 @@ private fun AppItemCard(
 }
 
 @Composable
-private fun AppIconPlaceholder(app: AppInfo) {
+private fun AppIconPlaceholder(app: AppInfo, iconPath: String?) {
+    val iconBitmap by produceState<ImageBitmap?>(initialValue = null, key1 = iconPath) {
+        value = withContext(Dispatchers.IO) {
+            iconPath?.let { BitmapFactory.decodeFile(it)?.asImageBitmap() }
+        }
+    }
     Card(
         modifier = Modifier.size(36.dp),
         shape = RoundedCornerShape(8.dp),
@@ -321,25 +372,35 @@ private fun AppIconPlaceholder(app: AppInfo) {
         ),
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Icon(
-                imageVector = Icons.Outlined.Android,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = if (app.isSystem) {
-                    MaterialTheme.colorScheme.onSecondaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                },
-            )
+            if (iconBitmap != null) {
+                Image(
+                    bitmap = iconBitmap,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Outlined.Android,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = if (app.isSystem) {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    },
+                )
+            }
         }
     }
 }
 
 @Composable
 private fun AppActionMenu(
-    packageName: String,
+    app: AppInfo,
     onLaunchClick: (String) -> Unit,
     onStopClick: (String) -> Unit,
+    onSetEnabledClick: (AppInfo, Boolean) -> Unit,
     onUninstallClick: (String) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -359,17 +420,32 @@ private fun AppActionMenu(
             DropdownMenuItem(
                 text = { Text("启动") },
                 leadingIcon = { Icon(Icons.Outlined.PlayArrow, contentDescription = null) },
+                enabled = app.enabled,
                 onClick = {
                     expanded = false
-                    onLaunchClick(packageName)
+                    onLaunchClick(app.packageName)
                 },
             )
             DropdownMenuItem(
                 text = { Text("停止") },
                 leadingIcon = { Icon(Icons.Outlined.StopCircle, contentDescription = null) },
+                enabled = app.enabled,
                 onClick = {
                     expanded = false
-                    onStopClick(packageName)
+                    onStopClick(app.packageName)
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(if (app.enabled) "冻结" else "启用") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = if (app.enabled) Icons.Outlined.Close else Icons.Outlined.Check,
+                        contentDescription = null,
+                    )
+                },
+                onClick = {
+                    expanded = false
+                    onSetEnabledClick(app, !app.enabled)
                 },
             )
             DropdownMenuItem(
@@ -377,12 +453,20 @@ private fun AppActionMenu(
                 leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null) },
                 onClick = {
                     expanded = false
-                    onUninstallClick(packageName)
+                    onUninstallClick(app.packageName)
                 },
             )
         }
     }
 }
+
+private val AppInfo.statusLabel: String
+    get() = when {
+        !enabled && isSystem -> "系统冻结"
+        !enabled -> "已冻结"
+        isSystem -> "系统"
+        else -> "用户"
+    }
 
 @Composable
 private fun AppsStatusMessage(status: OperationStatus) {
@@ -415,6 +499,9 @@ private fun AppsContentPreview() {
             onRefreshClick = {},
             onLaunchClick = {},
             onStopClick = {},
+            onSetEnabledClick = { _, _ -> },
+            onAppVisible = {},
+            onAppHidden = {},
             onUninstallClick = {},
             onCancelPendingAction = {},
             onConfirmPendingAction = {},

@@ -190,6 +190,27 @@ class KadbManager {
         }
     }
 
+    suspend fun setAppEnabled(packageName: String, enabled: Boolean): AdbOperationResult<Unit> = withContext(Dispatchers.IO) {
+        val command = if (enabled) {
+            "pm enable ${shellQuote(packageName)}"
+        } else {
+            "pm disable-user --user 0 ${shellQuote(packageName)}"
+        }
+        when (val result = shell(command)) {
+            is AdbOperationResult.Failure -> result
+            is AdbOperationResult.Success -> {
+                if (result.data.exitCode == 0) {
+                    AdbOperationResult.Success(Unit)
+                } else {
+                    AdbOperationResult.Failure(
+                        message = if (enabled) "启用应用失败" else "冻结应用失败",
+                        suggestion = result.data.errorOutput.ifBlank { "请确认包名正确，且设备允许修改该应用状态。" },
+                    )
+                }
+            }
+        }
+    }
+
     suspend fun listApps(): AdbOperationResult<List<AppInfo>> = withContext(Dispatchers.IO) {
         val kadb = activeKadb ?: return@withContext AdbOperationResult.Failure(
             message = "未连接设备",
@@ -197,9 +218,14 @@ class KadbManager {
         )
 
         runCatching {
-            val userPackages = parsePackageList(kadb.shell("pm list packages -3").output, isSystem = false)
-            val systemPackages = parsePackageList(kadb.shell("pm list packages -s").output, isSystem = true)
-            AdbOperationResult.Success((userPackages + systemPackages).sortedBy { it.packageName })
+            val disabledPackages = parsePackageNames(kadb.shell("pm list packages -d").output).toSet()
+            val userPackages = parsePackageList(kadb.shell("pm list packages -f -3").output, isSystem = false)
+            val systemPackages = parsePackageList(kadb.shell("pm list packages -f -s").output, isSystem = true)
+            AdbOperationResult.Success(
+                (userPackages + systemPackages)
+                    .map { app -> app.copy(enabled = app.packageName !in disabledPackages) }
+                    .sortedWith(compareBy<AppInfo> { !it.enabled }.thenBy { it.packageName }),
+            )
         }.getOrElse { error ->
             AdbOperationResult.Failure(
                 message = "读取应用列表失败",
@@ -352,18 +378,36 @@ class KadbManager {
     private fun parsePackageList(output: String, isSystem: Boolean): List<AppInfo> {
         return output
             .lineSequence()
-            .map { it.trim() }
-            .filter { it.startsWith("package:") }
-            .map { it.removePrefix("package:") }
-            .filter { it.isNotBlank() }
-            .map { packageName ->
+            .mapNotNull(::parsePackageLine)
+            .map { (packageName, sourcePath) ->
                 AppInfo(
                     packageName = packageName,
                     label = packageName.substringAfterLast('.'),
                     isSystem = isSystem,
+                    sourcePath = sourcePath,
                 )
             }
+    }
+
+    private fun parsePackageNames(output: String): List<String> {
+        return output
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.startsWith("package:") }
+            .map { it.removePrefix("package:") }
+            .filter { it.isNotBlank() }
             .toList()
+    }
+
+    private fun parsePackageLine(line: String): Pair<String, String>? {
+        val trimmed = line.trim()
+        if (!trimmed.startsWith("package:")) return null
+        val value = trimmed.removePrefix("package:").takeIf { it.isNotBlank() } ?: return null
+        return if ("=" in value) {
+            value.substringAfterLast("=") to value.substringBeforeLast("=")
+        } else {
+            value to ""
+        }
     }
 
     private fun buildListFilesCommand(remotePath: String): String {
