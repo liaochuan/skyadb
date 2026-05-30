@@ -1,5 +1,6 @@
 package com.sky22333.skyadb.ui.logs
 
+import android.content.ClipData
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -33,10 +34,11 @@ import com.sky22333.skyadb.ui.components.AppTopBar as TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -48,6 +50,7 @@ import com.sky22333.skyadb.ui.components.EmptyState
 import com.sky22333.skyadb.ui.components.SectionHeader
 import com.sky22333.skyadb.ui.theme.AdbManagerTheme
 import com.sky22333.skyadb.ui.theme.AppDimens
+import kotlinx.coroutines.launch
 
 @Composable
 fun SystemLogScreen(
@@ -56,8 +59,9 @@ fun SystemLogScreen(
     viewModel: SystemLogViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val clipboardManager = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
     SystemLogContent(
         bottomPadding = bottomPadding,
@@ -66,8 +70,11 @@ fun SystemLogScreen(
         onRefreshClick = viewModel::loadLogs,
         onClearClick = viewModel::clearLogs,
         onCopyClick = {
-            clipboardManager.setText(AnnotatedString(buildLogCopyText(uiState)))
-            Toast.makeText(context, "已复制当前日志", Toast.LENGTH_SHORT).show()
+            coroutineScope.launch {
+                val clipData = ClipData.newPlainText("系统日志", buildLogCopyText(uiState))
+                clipboard.setClipEntry(ClipEntry(clipData))
+                Toast.makeText(context, "已复制当前日志", Toast.LENGTH_SHORT).show()
+            }
         },
         onQueryChanged = viewModel::onQueryChanged,
         onLevelSelected = viewModel::onLevelSelected,
