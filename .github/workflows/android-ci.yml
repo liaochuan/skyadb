@@ -87,13 +87,13 @@ jobs:
           APK_PATH="$(find app/build/outputs/apk/release -name '*.apk' | head -n 1)"
           RELEASE_TITLE="skyadb ${RELEASE_TAG}"
           CURRENT_TAG="${RELEASE_TAG}"
-          PREVIOUS_TAG="$(git tag --sort=-v:refname | grep -v "^${CURRENT_TAG}$" | head -n 1 || true)"
+          PREVIOUS_TAG="$(git tag --list 'v*' --sort=-v:refname | grep -v "^${CURRENT_TAG}$" | head -n 1 || true)"
           if [[ -n "${PREVIOUS_TAG}" ]]; then
             RANGE="${PREVIOUS_TAG}..HEAD"
           else
             RANGE="HEAD"
           fi
-          CHANGELOG="$(git log "${RANGE}" --no-merges --pretty=format:'- %s (%h)' || true)"
+          CHANGELOG="$(git log "${RANGE}" --no-merges --pretty=format:'%s%x09%h' | awk -F '\t' '!seen[$1]++ { printf "- %s (%s)\n", $1, $2 }' || true)"
           if [[ -z "${CHANGELOG}" ]]; then
             CHANGELOG="- 本次发布未检测到新的提交记录。"
           fi
