@@ -1,7 +1,5 @@
 package com.sky22333.skyadb.ui.apps
 
-import android.graphics.BitmapFactory
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,32 +41,24 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.sky22333.skyadb.ui.components.AppTopBar as TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.sky22333.skyadb.apps.AppMetadata
 import com.sky22333.skyadb.model.AppInfo
 import com.sky22333.skyadb.model.OperationStatus
 import com.sky22333.skyadb.ui.components.EmptyState
 import com.sky22333.skyadb.ui.components.SectionHeader
 import com.sky22333.skyadb.ui.theme.AdbManagerTheme
 import com.sky22333.skyadb.ui.theme.AppDimens
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 @Composable
 fun AppsScreen(
@@ -92,8 +82,6 @@ fun AppsScreen(
         onLaunchClick = viewModel::launchApp,
         onStopClick = viewModel::forceStopApp,
         onSetEnabledClick = viewModel::setAppEnabled,
-        onAppVisible = viewModel::loadAppMetadata,
-        onAppHidden = viewModel::cancelAppMetadataLoad,
         onUninstallClick = viewModel::uninstallApp,
         onCancelPendingAction = viewModel::cancelPendingAction,
         onConfirmPendingAction = viewModel::confirmPendingAction,
@@ -112,8 +100,6 @@ private fun AppsContent(
     onLaunchClick: (String) -> Unit,
     onStopClick: (String) -> Unit,
     onSetEnabledClick: (AppInfo, Boolean) -> Unit,
-    onAppVisible: (AppInfo) -> Unit,
-    onAppHidden: (String) -> Unit,
     onUninstallClick: (String) -> Unit,
     onCancelPendingAction: () -> Unit,
     onConfirmPendingAction: () -> Unit,
@@ -195,12 +181,9 @@ private fun AppsContent(
                 ) { app ->
                     AppItemCard(
                         app = app,
-                        metadata = uiState.appMetadata[app.packageName],
                         onLaunchClick = onLaunchClick,
                         onStopClick = onStopClick,
                         onSetEnabledClick = onSetEnabledClick,
-                        onAppVisible = onAppVisible,
-                        onAppHidden = onAppHidden,
                         onUninstallClick = onUninstallClick,
                     )
                 }
@@ -296,21 +279,11 @@ private fun PendingActionCard(
 @Composable
 private fun AppItemCard(
     app: AppInfo,
-    metadata: AppMetadata?,
     onLaunchClick: (String) -> Unit,
     onStopClick: (String) -> Unit,
     onSetEnabledClick: (AppInfo, Boolean) -> Unit,
-    onAppVisible: (AppInfo) -> Unit,
-    onAppHidden: (String) -> Unit,
     onUninstallClick: (String) -> Unit,
 ) {
-    LaunchedEffect(app.packageName, app.sourcePath) {
-        onAppVisible(app)
-    }
-    DisposableEffect(app.packageName) {
-        onDispose { onAppHidden(app.packageName) }
-    }
-
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(AppDimens.CardRadius),
@@ -324,10 +297,10 @@ private fun AppItemCard(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AppIconPlaceholder(app = app, iconPath = metadata?.iconPath)
+            AppIconPlaceholder(app = app)
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = metadata?.label?.takeIf { it.isNotBlank() } ?: app.label,
+                    text = app.label,
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                 )
@@ -354,12 +327,7 @@ private fun AppItemCard(
 }
 
 @Composable
-private fun AppIconPlaceholder(app: AppInfo, iconPath: String?) {
-    val iconBitmap by produceState<ImageBitmap?>(initialValue = null, key1 = iconPath) {
-        value = withContext(Dispatchers.IO) {
-            iconPath?.let { BitmapFactory.decodeFile(it)?.asImageBitmap() }
-        }
-    }
+private fun AppIconPlaceholder(app: AppInfo) {
     Card(
         modifier = Modifier.size(36.dp),
         shape = RoundedCornerShape(8.dp),
@@ -372,26 +340,16 @@ private fun AppIconPlaceholder(app: AppInfo, iconPath: String?) {
         ),
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            val bitmap = iconBitmap
-            if (bitmap != null) {
-                Image(
-                    bitmap = bitmap,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Outlined.Android,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = if (app.isSystem) {
-                        MaterialTheme.colorScheme.onSecondaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    },
-                )
-            }
+            Icon(
+                imageVector = Icons.Outlined.Android,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = if (app.isSystem) {
+                    MaterialTheme.colorScheme.onSecondaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                },
+            )
         }
     }
 }
@@ -501,8 +459,6 @@ private fun AppsContentPreview() {
             onLaunchClick = {},
             onStopClick = {},
             onSetEnabledClick = { _, _ -> },
-            onAppVisible = {},
-            onAppHidden = {},
             onUninstallClick = {},
             onCancelPendingAction = {},
             onConfirmPendingAction = {},

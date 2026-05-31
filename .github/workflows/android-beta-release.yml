@@ -109,7 +109,7 @@ jobs:
           RELEASE_APK="${RUNNER_TEMP}/skyadb-${RELEASE_TAG}.apk"
           cp "${APK_PATH}" "${RELEASE_APK}"
 
-          PREVIOUS_TAG="$(git tag --list 'v*' --sort=-v:refname | grep -v "^${RELEASE_TAG}$" | head -n 1 || true)"
+          PREVIOUS_TAG="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)"
           if [[ -n "${PREVIOUS_TAG}" ]]; then
             RANGE="${PREVIOUS_TAG}..HEAD"
           else

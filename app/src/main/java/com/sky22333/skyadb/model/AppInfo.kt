@@ -5,5 +5,4 @@ data class AppInfo(
     val label: String,
     val isSystem: Boolean,
     val enabled: Boolean = true,
-    val sourcePath: String = "",
 )

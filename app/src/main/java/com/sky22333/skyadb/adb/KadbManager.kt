@@ -219,8 +219,8 @@ class KadbManager {
 
         runCatching {
             val disabledPackages = parsePackageNames(kadb.shell("pm list packages -d").output).toSet()
-            val userPackages = parsePackageList(kadb.shell("pm list packages -f -3").output, isSystem = false)
-            val systemPackages = parsePackageList(kadb.shell("pm list packages -f -s").output, isSystem = true)
+            val userPackages = parsePackageList(kadb.shell("pm list packages -3").output, isSystem = false)
+            val systemPackages = parsePackageList(kadb.shell("pm list packages -s").output, isSystem = true)
             AdbOperationResult.Success(
                 (userPackages + systemPackages)
                     .map { app -> app.copy(enabled = app.packageName !in disabledPackages) }
@@ -375,18 +375,14 @@ class KadbManager {
     }
 
     private fun parsePackageList(output: String, isSystem: Boolean): List<AppInfo> {
-        return output
-            .lineSequence()
-            .mapNotNull(::parsePackageLine)
-            .map { (packageName, sourcePath) ->
+        return parsePackageNames(output)
+            .map { packageName ->
                 AppInfo(
                     packageName = packageName,
                     label = packageName.substringAfterLast('.'),
                     isSystem = isSystem,
-                    sourcePath = sourcePath,
                 )
             }
-            .toList()
     }
 
     private fun parsePackageNames(output: String): List<String> {
@@ -397,17 +393,6 @@ class KadbManager {
             .map { it.removePrefix("package:") }
             .filter { it.isNotBlank() }
             .toList()
-    }
-
-    private fun parsePackageLine(line: String): Pair<String, String>? {
-        val trimmed = line.trim()
-        if (!trimmed.startsWith("package:")) return null
-        val value = trimmed.removePrefix("package:").takeIf { it.isNotBlank() } ?: return null
-        return if ("=" in value) {
-            value.substringAfterLast("=") to value.substringBeforeLast("=")
-        } else {
-            value to ""
-        }
     }
 
     private fun buildListFilesCommand(remotePath: String): String {
