@@ -1,5 +1,7 @@
 package com.sky22333.skyadb.ui.apps
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +23,7 @@ import androidx.compose.material.icons.outlined.Android
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Refresh
@@ -67,9 +70,19 @@ fun AppsScreen(
     viewModel: AppsViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/vnd.android.package-archive"),
+        onResult = viewModel::exportPendingApp,
+    )
 
     LaunchedEffect(Unit) {
         viewModel.loadApps()
+    }
+
+    LaunchedEffect(uiState.pendingExportPackage) {
+        uiState.pendingExportPackage?.let { packageName ->
+            exportLauncher.launch("$packageName.apk")
+        }
     }
 
     AppsContent(
@@ -82,6 +95,7 @@ fun AppsScreen(
         onLaunchClick = viewModel::launchApp,
         onStopClick = viewModel::forceStopApp,
         onSetEnabledClick = viewModel::setAppEnabled,
+        onExportClick = viewModel::requestExport,
         onUninstallClick = viewModel::uninstallApp,
         onCancelPendingAction = viewModel::cancelPendingAction,
         onConfirmPendingAction = viewModel::confirmPendingAction,
@@ -100,6 +114,7 @@ private fun AppsContent(
     onLaunchClick: (String) -> Unit,
     onStopClick: (String) -> Unit,
     onSetEnabledClick: (AppInfo, Boolean) -> Unit,
+    onExportClick: (String) -> Unit,
     onUninstallClick: (String) -> Unit,
     onCancelPendingAction: () -> Unit,
     onConfirmPendingAction: () -> Unit,
@@ -184,6 +199,7 @@ private fun AppsContent(
                         onLaunchClick = onLaunchClick,
                         onStopClick = onStopClick,
                         onSetEnabledClick = onSetEnabledClick,
+                        onExportClick = onExportClick,
                         onUninstallClick = onUninstallClick,
                     )
                 }
@@ -282,6 +298,7 @@ private fun AppItemCard(
     onLaunchClick: (String) -> Unit,
     onStopClick: (String) -> Unit,
     onSetEnabledClick: (AppInfo, Boolean) -> Unit,
+    onExportClick: (String) -> Unit,
     onUninstallClick: (String) -> Unit,
 ) {
     Card(
@@ -320,6 +337,7 @@ private fun AppItemCard(
                 onLaunchClick = onLaunchClick,
                 onStopClick = onStopClick,
                 onSetEnabledClick = onSetEnabledClick,
+                onExportClick = onExportClick,
                 onUninstallClick = onUninstallClick,
             )
         }
@@ -360,6 +378,7 @@ private fun AppActionMenu(
     onLaunchClick: (String) -> Unit,
     onStopClick: (String) -> Unit,
     onSetEnabledClick: (AppInfo, Boolean) -> Unit,
+    onExportClick: (String) -> Unit,
     onUninstallClick: (String) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -405,6 +424,14 @@ private fun AppActionMenu(
                 onClick = {
                     expanded = false
                     onSetEnabledClick(app, !app.enabled)
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("导出") },
+                leadingIcon = { Icon(Icons.Outlined.Download, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onExportClick(app.packageName)
                 },
             )
             DropdownMenuItem(
@@ -459,6 +486,7 @@ private fun AppsContentPreview() {
             onLaunchClick = {},
             onStopClick = {},
             onSetEnabledClick = { _, _ -> },
+            onExportClick = {},
             onUninstallClick = {},
             onCancelPendingAction = {},
             onConfirmPendingAction = {},

@@ -1,12 +1,16 @@
 package com.sky22333.skyadb.ui.apps
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sky22333.skyadb.AppServices
+import com.sky22333.skyadb.files.LocalFileManager
 import com.sky22333.skyadb.model.AdbOperationResult
 import com.sky22333.skyadb.model.AppInfo
 import com.sky22333.skyadb.model.OperationStatus
 import com.sky22333.skyadb.repository.AdbRepository
+import java.io.File
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,6 +21,7 @@ data class AppsUiState(
     val filter: AppFilter = AppFilter.All,
     val apps: List<AppInfo> = emptyList(),
     val pendingAction: AppPendingAction? = null,
+    val pendingExportPackage: String? = null,
     val operationStatus: OperationStatus = OperationStatus.Idle,
     val loading: Boolean = false,
 ) {
@@ -56,6 +61,7 @@ sealed interface AppPendingAction {
 }
 
 class AppsViewModel(
+    private val fileManager: LocalFileManager = AppServices.localFileManager,
     private val adbRepository: AdbRepository = AppServices.adbRepository,
 ) : ViewModel() {
     private val state = MutableStateFlow(AppsUiState())
@@ -116,6 +122,33 @@ class AppsViewModel(
         )
     }
 
+    fun requestExport(packageName: String) {
+        state.value = state.value.copy(pendingExportPackage = packageName)
+    }
+
+    fun exportPendingApp(uri: Uri?) {
+        val packageName = state.value.pendingExportPackage ?: return
+        state.value = state.value.copy(pendingExportPackage = null)
+        if (uri == null) return
+
+        state.value = state.value.copy(operationStatus = OperationStatus.Running("正在导出 $packageName"))
+        viewModelScope.launch(Dispatchers.IO) {
+            val target = fileManager.createExportApkFile(packageName)
+            try {
+                when (val result = adbRepository.exportAppApk(packageName, target)) {
+                    is AdbOperationResult.Success -> saveExportedApk(result.data, uri)
+                    is AdbOperationResult.Failure -> {
+                        state.value = state.value.copy(
+                            operationStatus = OperationStatus.Failed(result.message, result.suggestion),
+                        )
+                    }
+                }
+            } finally {
+                runCatching { target.delete() }
+            }
+        }
+    }
+
     fun cancelPendingAction() {
         state.value = state.value.copy(pendingAction = null)
     }
@@ -164,5 +197,23 @@ class AppsViewModel(
                 }
             }
         }
+    }
+
+    private fun saveExportedApk(file: File, uri: Uri) {
+        runCatching {
+            fileManager.copyToUri(file, uri)
+        }.fold(
+            onSuccess = {
+                state.value = state.value.copy(operationStatus = OperationStatus.Success("APK 导出完成"))
+            },
+            onFailure = { error ->
+                state.value = state.value.copy(
+                    operationStatus = OperationStatus.Failed(
+                        text = "保存 APK 失败",
+                        suggestion = error.message ?: "请确认保存位置可写，并保持应用前台运行。",
+                    ),
+                )
+            },
+        )
     }
 }

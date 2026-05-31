@@ -35,4 +35,27 @@ class LocalFileManager(
         }
         return target
     }
+
+    fun createExportApkFile(packageName: String): File {
+        val safeName = packageName.replace(Regex("""[\\/:*?"<>|]"""), "_").ifBlank { "app" }
+        val targetDir = File(context.cacheDir, "exported-apps")
+        targetDir.mkdirs()
+        cleanupApkFiles(targetDir)
+        return File(targetDir, "$safeName.apk")
+    }
+
+    fun copyToUri(file: File, uri: Uri) {
+        context.contentResolver.openOutputStream(uri).use { output ->
+            requireNotNull(output) { "无法写入选择的保存位置" }
+            file.inputStream().use { input ->
+                input.copyTo(output)
+            }
+        }
+    }
+
+    private fun cleanupApkFiles(targetDir: File) {
+        targetDir.listFiles()
+            ?.filter { it.isFile && it.extension.equals("apk", ignoreCase = true) }
+            ?.forEach { file -> runCatching { file.delete() } }
+    }
 }

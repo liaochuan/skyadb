@@ -211,6 +211,34 @@ class KadbManager {
         }
     }
 
+    suspend fun exportAppApk(packageName: String, localFile: File): AdbOperationResult<File> = withContext(Dispatchers.IO) {
+        val pathResult = when (val result = shell("pm path ${shellQuote(packageName)}")) {
+            is AdbOperationResult.Failure -> return@withContext result
+            is AdbOperationResult.Success -> result.data
+        }
+        if (pathResult.exitCode != 0) {
+            return@withContext AdbOperationResult.Failure(
+                message = "导出 APK 失败",
+                suggestion = pathResult.errorOutput.ifBlank { "请确认应用存在，并保持设备连接。" },
+            )
+        }
+
+        val apkPath = parseApkPaths(pathResult.output).singleOrNull() ?: return@withContext AdbOperationResult.Failure(
+            message = "导出 APK 失败",
+            suggestion = "仅支持导出单 APK 应用，请确认应用存在且不是拆分安装包。",
+        )
+
+        localFile.parentFile?.mkdirs()
+        when (val pullResult = pull(apkPath, localFile)) {
+            is AdbOperationResult.Success -> AdbOperationResult.Success(localFile)
+            is AdbOperationResult.Failure -> AdbOperationResult.Failure(
+                message = "导出 APK 失败",
+                suggestion = pullResult.suggestion,
+                cause = pullResult.cause,
+            )
+        }
+    }
+
     suspend fun listApps(): AdbOperationResult<List<AppInfo>> = withContext(Dispatchers.IO) {
         val kadb = activeKadb ?: return@withContext AdbOperationResult.Failure(
             message = "未连接设备",
@@ -392,6 +420,16 @@ class KadbManager {
             .filter { it.startsWith("package:") }
             .map { it.removePrefix("package:") }
             .filter { it.isNotBlank() }
+            .toList()
+    }
+
+    private fun parseApkPaths(output: String): List<String> {
+        return output
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.startsWith("package:") }
+            .map { it.removePrefix("package:") }
+            .filter { it.endsWith(".apk", ignoreCase = true) }
             .toList()
     }
 
