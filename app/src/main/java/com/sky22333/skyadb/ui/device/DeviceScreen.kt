@@ -157,7 +157,7 @@ private fun DeviceContent(
                                     fontWeight = FontWeight.SemiBold,
                                 )
                                 Text(
-                                    text = "连接设备后会显示完整系统信息",
+                                    text = "连接设备后可在下方查看系统信息",
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     style = MaterialTheme.typography.bodyMedium,
                                 )
