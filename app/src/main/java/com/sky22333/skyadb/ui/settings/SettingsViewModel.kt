@@ -24,7 +24,6 @@ data class SettingsUiState(
     val connectionTimeoutError: String? = null,
     val commandTimeoutError: String? = null,
     val scanRangesError: String? = null,
-    val statusText: String = "设置会自动保存到本机。",
 )
 
 class SettingsViewModel(
@@ -120,7 +119,6 @@ class SettingsViewModel(
     fun onClearRecentDevicesClicked() {
         viewModelScope.launch {
             recentDeviceStore.clear()
-            state.value = state.value.copy(statusText = "最近设备记录已清理。")
         }
     }
 

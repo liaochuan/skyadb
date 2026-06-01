@@ -17,7 +17,6 @@ import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.SettingsEthernet
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import com.sky22333.skyadb.ui.components.AppTopBar as TopAppBar
@@ -192,13 +191,7 @@ private fun SettingsContent(
                         title = "清理最近设备",
                         description = "移除连接历史",
                         onClick = onClearRecentDevicesClicked,
-                    ) {
-                        Text(
-                            text = uiState.statusText,
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
+                    )
                 }
             }
 
