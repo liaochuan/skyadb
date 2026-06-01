@@ -7,8 +7,12 @@ import android.view.SurfaceView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -51,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sky22333.skyadb.model.OperationStatus
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MirrorScreen(
     onBackClick: () -> Unit,
@@ -70,32 +75,48 @@ fun MirrorScreen(
             .fillMaxSize()
             .background(Color.Black),
     ) {
-        AndroidView(
+        BoxWithConstraints(
             modifier = Modifier.fillMaxSize(),
-            factory = { context ->
-                SurfaceView(context).apply {
-                    holder.addCallback(object : SurfaceHolder.Callback {
-                        override fun surfaceCreated(holder: SurfaceHolder) {
-                            surface = holder.surface
-                            viewModel.start(holder.surface)
-                        }
+            contentAlignment = Alignment.Center,
+        ) {
+            val surfaceModifier = mirrorSurfaceModifier(
+                containerWidth = maxWidth.value,
+                containerHeight = maxHeight.value,
+                videoWidth = uiState.videoWidth,
+                videoHeight = uiState.videoHeight,
+            )
+            AndroidView(
+                modifier = surfaceModifier,
+                factory = { context ->
+                    SurfaceView(context).apply {
+                        holder.addCallback(object : SurfaceHolder.Callback {
+                            override fun surfaceCreated(holder: SurfaceHolder) {
+                                surface = holder.surface
+                                viewModel.start(holder.surface)
+                            }
 
-                        override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) = Unit
+                            override fun surfaceChanged(
+                                holder: SurfaceHolder,
+                                format: Int,
+                                width: Int,
+                                height: Int,
+                            ) = Unit
 
-                        override fun surfaceDestroyed(holder: SurfaceHolder) {
-                            surface = null
-                            viewModel.stop()
+                            override fun surfaceDestroyed(holder: SurfaceHolder) {
+                                surface = null
+                                viewModel.detachSurface()
+                            }
+                        })
+                        setOnTouchListener { view, event ->
+                            if (surface != null) {
+                                viewModel.sendTouch(event, view.width, view.height)
+                            }
+                            true
                         }
-                    })
-                    setOnTouchListener { view, event ->
-                        if (surface != null) {
-                            viewModel.sendTouch(event, view.width, view.height)
-                        }
-                        true
                     }
-                }
-            },
-        )
+                },
+            )
+        }
 
         MirrorTopActions(
             controlsVisible = controlsVisible,
@@ -125,6 +146,28 @@ fun MirrorScreen(
                 status = uiState.status,
             )
         }
+    }
+}
+
+private fun mirrorSurfaceModifier(
+    containerWidth: Float,
+    containerHeight: Float,
+    videoWidth: Int,
+    videoHeight: Int,
+): Modifier {
+    if (containerWidth <= 0f || containerHeight <= 0f || videoWidth <= 0 || videoHeight <= 0) {
+        return Modifier.fillMaxSize()
+    }
+    val videoRatio = videoWidth.toFloat() / videoHeight.toFloat()
+    val containerRatio = containerWidth / containerHeight
+    return if (containerRatio > videoRatio) {
+        Modifier
+            .fillMaxHeight()
+            .aspectRatio(videoRatio)
+    } else {
+        Modifier
+            .fillMaxWidth()
+            .aspectRatio(videoRatio)
     }
 }
 

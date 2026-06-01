@@ -19,7 +19,7 @@ class ScrcpyRepository(
 
     suspend fun start(
         surface: Surface,
-        options: ScrcpyOptions = ScrcpyOptions(),
+        qualityPreset: MirrorQualityPreset = MirrorQualityPreset.Balanced,
         onVideoSize: (Int, Int) -> Unit,
         onStreamError: (Throwable) -> Unit = {},
     ): AdbOperationResult<ScrcpyDeviceInfo> = withContext(Dispatchers.IO) {
@@ -35,7 +35,7 @@ class ScrcpyRepository(
                 context = context,
                 kadb = kadb,
                 surface = surface,
-                options = options,
+                options = qualityPreset.options,
                 onVideoSize = onVideoSize,
                 onError = { error ->
                     DiagnosticLogger.record(
@@ -43,7 +43,7 @@ class ScrcpyRepository(
                         operation = "视频流",
                         target = kadbManager.currentEndpoint(),
                         message = "屏幕镜像视频流异常",
-                        suggestion = "请重新进入屏幕镜像；如果持续失败，请降低画质或确认设备支持当前编码。",
+                        suggestion = "当前画质：${qualityPreset.label}。请重新进入屏幕镜像；如果持续失败，请切换到流畅画质。",
                         cause = error,
                     )
                     stop()
@@ -58,7 +58,7 @@ class ScrcpyRepository(
                     operation = "启动镜像",
                     target = kadbManager.currentEndpoint(),
                     message = "屏幕镜像启动失败",
-                    suggestion = "请确认设备已授权 ADB、scrcpy-server-v4.0 已放入 assets，并查看详细错误。",
+                    suggestion = "当前画质：${qualityPreset.label}。请确认设备已授权 ADB；如果持续失败，请切换到流畅画质。",
                     cause = error,
                 )
                 AdbOperationResult.Failure(

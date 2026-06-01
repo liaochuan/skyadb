@@ -5,8 +5,10 @@ import android.view.Surface
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sky22333.skyadb.AppServices
+import com.sky22333.skyadb.data.AppSettingsStore
 import com.sky22333.skyadb.model.AdbOperationResult
 import com.sky22333.skyadb.model.OperationStatus
+import com.sky22333.skyadb.scrcpy.MirrorQualityPreset
 import com.sky22333.skyadb.scrcpy.ScrcpyRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,16 +25,26 @@ data class MirrorUiState(
     val deviceName: String = "屏幕镜像",
     val videoWidth: Int = 0,
     val videoHeight: Int = 0,
+    val qualityPreset: MirrorQualityPreset = MirrorQualityPreset.Balanced,
 )
 
 class MirrorViewModel(
     private val repository: ScrcpyRepository = AppServices.scrcpyRepository,
+    private val settingsStore: AppSettingsStore = AppServices.settingsStore,
 ) : ViewModel() {
     private val state = MutableStateFlow(MirrorUiState())
     val uiState: StateFlow<MirrorUiState> = state.asStateFlow()
 
     private val controlScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var started = false
+
+    init {
+        viewModelScope.launch {
+            settingsStore.settings.collect { settings ->
+                state.value = state.value.copy(qualityPreset = settings.mirrorQualityPreset)
+            }
+        }
+    }
 
     fun start(surface: Surface) {
         if (started) return
@@ -42,6 +54,7 @@ class MirrorViewModel(
             when (
                 val result = repository.start(
                     surface = surface,
+                    qualityPreset = state.value.qualityPreset,
                     onVideoSize = { width, height ->
                         state.value = state.value.copy(videoWidth = width, videoHeight = height)
                     },
@@ -93,6 +106,10 @@ class MirrorViewModel(
         controlScope.launch {
             repository.sendText(text)
         }
+    }
+
+    fun detachSurface() {
+        started = false
     }
 
     fun stop() {
