@@ -8,8 +8,8 @@ body:
   - type: input
     id: skyadb_android
     attributes:
-      label: SkyADB运行设备信息
-      description: 运行 SkyADB 的设备品牌、型号，以及安卓版本
+      label: 运行skyadb的设备信息
+      description: 运行 skyadb 的设备品牌、型号，以及安卓版本
       placeholder: "例如：小米14，Android 15"
     validations:
       required: true
