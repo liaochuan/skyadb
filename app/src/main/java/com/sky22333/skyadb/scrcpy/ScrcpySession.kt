@@ -85,9 +85,9 @@ class ScrcpySession private constructor(
 
                 delay(200)
                 val videoStream = openLocalAbstractWithRetry(kadb, socketName, expectDummyByte = true)
+                val controlStream = openLocalAbstractWithRetry(kadb, socketName, expectDummyByte = false)
                 val name = readDeviceName(videoStream)
                 val codecId = videoStream.source.readInt()
-                val controlStream = openLocalAbstractWithRetry(kadb, socketName, expectDummyByte = false)
                 val controlClient = ScrcpyControlClient(controlStream)
                 val decoder = ScrcpyVideoDecoder(
                     stream = videoStream,
