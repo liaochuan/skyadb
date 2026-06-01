@@ -20,6 +20,7 @@
         android:theme="@style/Theme.Skyadb">
         <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|screenLayout|screenSize|smallestScreenSize|keyboardHidden"
             android:exported="true"
             android:theme="@style/Theme.Skyadb">
             <intent-filter>

@@ -15,6 +15,7 @@ import androidx.compose.material.icons.outlined.CleaningServices
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.SettingsEthernet
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedTextField
@@ -30,6 +31,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sky22333.skyadb.data.ThemeMode
+import com.sky22333.skyadb.scrcpy.MirrorQualityPreset
 import com.sky22333.skyadb.ui.components.SectionHeader
 import com.sky22333.skyadb.ui.components.SettingBlock
 import com.sky22333.skyadb.ui.components.SettingGroupCard
@@ -53,6 +55,7 @@ fun SettingsScreen(
         onCommandTimeoutChanged = viewModel::onCommandTimeoutChanged,
         onScanRangesChanged = viewModel::onScanRangesChanged,
         onThemeModeSelected = viewModel::onThemeModeSelected,
+        onMirrorQualityPresetSelected = viewModel::onMirrorQualityPresetSelected,
         onClearRecentDevicesClicked = viewModel::onClearRecentDevicesClicked,
         onDiagnosticsClick = onDiagnosticsClick,
     )
@@ -68,6 +71,7 @@ private fun SettingsContent(
     onCommandTimeoutChanged: (String) -> Unit,
     onScanRangesChanged: (String) -> Unit,
     onThemeModeSelected: (ThemeMode) -> Unit,
+    onMirrorQualityPresetSelected: (MirrorQualityPreset) -> Unit,
     onClearRecentDevicesClicked: () -> Unit,
     onDiagnosticsClick: () -> Unit,
 ) {
@@ -153,6 +157,30 @@ private fun SettingsContent(
                 }
             }
 
+            item { SectionHeader(title = "屏幕镜像", description = "清晰度与流畅度") }
+            item {
+                SettingGroupCard {
+                    SettingBlock(
+                        icon = Icons.Outlined.Tune,
+                        title = "镜像画质",
+                        description = "下次启动镜像生效",
+                    ) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            MirrorQualityPreset.entries.forEach { preset ->
+                                FilterChip(
+                                    selected = uiState.mirrorQualityPreset == preset,
+                                    onClick = { onMirrorQualityPresetSelected(preset) },
+                                    label = { Text(preset.label) },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             item { SectionHeader(title = "外观", description = "主题显示方式") }
             item {
                 SettingGroupCard {
@@ -223,6 +251,7 @@ private fun SettingsContentPreview() {
             onCommandTimeoutChanged = {},
             onScanRangesChanged = {},
             onThemeModeSelected = {},
+            onMirrorQualityPresetSelected = {},
             onClearRecentDevicesClicked = {},
             onDiagnosticsClick = {},
         )

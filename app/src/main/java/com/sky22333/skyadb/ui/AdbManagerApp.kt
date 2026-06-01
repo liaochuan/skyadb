@@ -39,6 +39,7 @@ import com.sky22333.skyadb.ui.home.HomeScreen
 import com.sky22333.skyadb.ui.install.InstallApkScreen
 import com.sky22333.skyadb.ui.localapps.LocalAppsScreen
 import com.sky22333.skyadb.ui.logs.SystemLogScreen
+import com.sky22333.skyadb.ui.mirror.MirrorScreen
 import com.sky22333.skyadb.ui.pairing.PairingScreen
 import com.sky22333.skyadb.ui.remote.RemoteControlScreen
 import com.sky22333.skyadb.ui.screenshot.ScreenshotScreen
@@ -54,38 +55,40 @@ fun AdbManagerApp() {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                tonalElevation = 0.dp,
-            ) {
-                bottomDestinations.forEach { destination ->
-                    val selected = currentDestination?.hierarchy?.any { it.route == destination.route } == true
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = {
-                            navController.navigate(destination.route) {
-                                popUpTo(navController.graph.startDestinationId) {
-                                    saveState = true
+            if (currentDestination?.route != MirrorRoute) {
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    tonalElevation = 0.dp,
+                ) {
+                    bottomDestinations.forEach { destination ->
+                        val selected = currentDestination?.hierarchy?.any { it.route == destination.route } == true
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = {
+                                navController.navigate(destination.route) {
+                                    popUpTo(navController.graph.startDestinationId) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = {
-                            Icon(
-                                imageVector = destination.icon,
-                                contentDescription = destination.label,
-                            )
-                        },
-                        label = { Text(destination.label) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.onPrimary,
-                            selectedTextColor = MaterialTheme.colorScheme.primary,
-                            indicatorColor = MaterialTheme.colorScheme.primary,
-                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        ),
-                    )
+                            },
+                            icon = {
+                                Icon(
+                                    imageVector = destination.icon,
+                                    contentDescription = destination.label,
+                                )
+                            },
+                            label = { Text(destination.label) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.primary,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
+                        )
+                    }
                 }
             }
         },
@@ -148,6 +151,7 @@ fun AdbManagerApp() {
                     onScreenshotClick = { navController.navigate(AppDestination.Screenshot.route) },
                     onShellClick = { navController.navigate(AppDestination.Shell.route) },
                     onRemoteClick = { navController.navigate(RemoteRoute) },
+                    onMirrorClick = { navController.navigate(MirrorRoute) },
                     onLogsClick = { navController.navigate(LogsRoute) },
                 )
             }
@@ -220,6 +224,9 @@ fun AdbManagerApp() {
             composable(RemoteRoute) {
                 RemoteControlScreen(bottomPadding = bottomPadding, onBackClick = { navController.popBackStack() })
             }
+            composable(MirrorRoute) {
+                MirrorScreen(onBackClick = { navController.popBackStack() })
+            }
             composable(LogsRoute) {
                 SystemLogScreen(bottomPadding = bottomPadding, onBackClick = { navController.popBackStack() })
             }
@@ -260,5 +267,6 @@ private const val DiscoveryPortKey = "discovery_port"
 private const val PairingHostKey = "pairing_host"
 private const val PairingPortKey = "pairing_port"
 private const val RemoteRoute = "remote"
+private const val MirrorRoute = "mirror"
 private const val LogsRoute = "logs"
 private const val DiagnosticsRoute = "diagnostics"

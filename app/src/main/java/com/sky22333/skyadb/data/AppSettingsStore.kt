@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.sky22333.skyadb.scrcpy.MirrorQualityPreset
 import java.io.IOException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -19,6 +20,7 @@ data class AppSettings(
     val commandTimeoutSeconds: Int = 30,
     val scanRanges: String = "",
     val themeMode: ThemeMode = ThemeMode.System,
+    val mirrorQualityPreset: MirrorQualityPreset = MirrorQualityPreset.Balanced,
 )
 
 enum class ThemeMode(val label: String) {
@@ -47,6 +49,7 @@ class AppSettingsStore(context: Context) {
                 themeMode = ThemeMode.entries.firstOrNull {
                     it.name == preferences[Keys.ThemeMode]
                 } ?: ThemeMode.System,
+                mirrorQualityPreset = MirrorQualityPreset.fromName(preferences[Keys.MirrorQualityPreset]),
             )
         }
 
@@ -80,11 +83,18 @@ class AppSettingsStore(context: Context) {
         }
     }
 
+    suspend fun updateMirrorQualityPreset(preset: MirrorQualityPreset) {
+        dataStore.edit { preferences ->
+            preferences[Keys.MirrorQualityPreset] = preset.name
+        }
+    }
+
     private object Keys {
         val DefaultPort = intPreferencesKey("default_port")
         val ConnectionTimeoutSeconds = intPreferencesKey("connection_timeout_seconds")
         val CommandTimeoutSeconds = intPreferencesKey("command_timeout_seconds")
         val ScanRanges = stringPreferencesKey("scan_ranges")
         val ThemeMode = stringPreferencesKey("theme_mode")
+        val MirrorQualityPreset = stringPreferencesKey("mirror_quality_preset")
     }
 }

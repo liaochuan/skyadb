@@ -24,6 +24,7 @@ enum class DiagnosticModule(val label: String) {
     Screenshot("截图"),
     Logs("系统日志"),
     Remote("遥控器"),
+    Mirror("屏幕镜像"),
     Download("下载"),
     Settings("设置"),
 }

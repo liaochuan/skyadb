@@ -8,6 +8,7 @@ import com.sky22333.skyadb.data.RecentDeviceStore
 import com.sky22333.skyadb.data.ThemeMode
 import com.sky22333.skyadb.discovery.NetworkInfoProvider
 import com.sky22333.skyadb.discovery.ScanRangeParser
+import com.sky22333.skyadb.scrcpy.MirrorQualityPreset
 import com.sky22333.skyadb.validation.NetworkInputValidator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +21,7 @@ data class SettingsUiState(
     val commandTimeoutSeconds: String = "30",
     val scanRanges: String = "",
     val themeMode: ThemeMode = ThemeMode.System,
+    val mirrorQualityPreset: MirrorQualityPreset = MirrorQualityPreset.Balanced,
     val defaultPortError: String? = null,
     val connectionTimeoutError: String? = null,
     val commandTimeoutError: String? = null,
@@ -45,6 +47,7 @@ class SettingsViewModel(
                     commandTimeoutSeconds = settings.commandTimeoutSeconds.toString(),
                     scanRanges = scanRanges,
                     themeMode = settings.themeMode,
+                    mirrorQualityPreset = settings.mirrorQualityPreset,
                     defaultPortError = null,
                     connectionTimeoutError = null,
                     commandTimeoutError = null,
@@ -113,6 +116,13 @@ class SettingsViewModel(
         state.value = state.value.copy(themeMode = themeMode)
         viewModelScope.launch {
             settingsStore.updateThemeMode(themeMode)
+        }
+    }
+
+    fun onMirrorQualityPresetSelected(preset: MirrorQualityPreset) {
+        state.value = state.value.copy(mirrorQualityPreset = preset)
+        viewModelScope.launch {
+            settingsStore.updateMirrorQualityPreset(preset)
         }
     }
 
