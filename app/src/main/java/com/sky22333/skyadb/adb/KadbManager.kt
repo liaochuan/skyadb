@@ -396,6 +396,14 @@ class KadbManager {
 
     fun currentEndpoint(): String? = activeEndpoint
 
+    fun createStreamingClient(): Kadb? {
+        val endpoint = activeEndpoint ?: return null
+        val host = endpoint.substringBeforeLast(':', missingDelimiterValue = "")
+        val port = endpoint.substringAfterLast(':').toIntOrNull()
+        if (host.isBlank() || port == null) return null
+        return Kadb.create(host, port, 10_000, 0)
+    }
+
     suspend fun checkRuntimeReady(): Boolean = true
 
     private fun parseResolution(output: String): String {

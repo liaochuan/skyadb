@@ -60,6 +60,7 @@ fun DeviceScreen(
     onScreenshotClick: () -> Unit = {},
     onShellClick: () -> Unit = {},
     onRemoteClick: () -> Unit = {},
+    onMirrorClick: () -> Unit = {},
     onLogsClick: () -> Unit = {},
     viewModel: DeviceViewModel = viewModel(),
 ) {
@@ -76,6 +77,7 @@ fun DeviceScreen(
         onScreenshotClick = onScreenshotClick,
         onShellClick = onShellClick,
         onRemoteClick = onRemoteClick,
+        onMirrorClick = onMirrorClick,
         onLogsClick = onLogsClick,
         onRefreshClick = viewModel::refreshDeviceInfo,
         onToggleInfoClick = viewModel::toggleInfoExpanded,
@@ -95,6 +97,7 @@ private fun DeviceContent(
     onScreenshotClick: () -> Unit,
     onShellClick: () -> Unit,
     onRemoteClick: () -> Unit,
+    onMirrorClick: () -> Unit,
     onLogsClick: () -> Unit,
     onRefreshClick: () -> Unit,
     onToggleInfoClick: () -> Unit,
@@ -179,6 +182,7 @@ private fun DeviceContent(
                     onScreenshotClick = onScreenshotClick,
                     onShellClick = onShellClick,
                     onRemoteClick = onRemoteClick,
+                    onMirrorClick = onMirrorClick,
                     onLogsClick = onLogsClick,
                 )
             }
@@ -287,6 +291,7 @@ private fun QuickActionGrid(
     onScreenshotClick: () -> Unit,
     onShellClick: () -> Unit,
     onRemoteClick: () -> Unit,
+    onMirrorClick: () -> Unit,
     onLogsClick: () -> Unit,
 ) {
     val actions = listOf(
@@ -296,6 +301,7 @@ private fun QuickActionGrid(
         QuickActionSpec("在线下载", Icons.Outlined.Download, onDownloadClick),
         QuickActionSpec("文件管理", Icons.Outlined.FolderOpen, onFilesClick),
         QuickActionSpec("Shell", Icons.Outlined.Code, onShellClick),
+        QuickActionSpec("屏幕镜像", Icons.Outlined.Android, onMirrorClick),
         QuickActionSpec("遥控器", Icons.Outlined.Android, onRemoteClick),
         QuickActionSpec("系统日志", Icons.Outlined.Code, onLogsClick),
         QuickActionSpec("截图", Icons.Outlined.PhotoCamera, onScreenshotClick),
@@ -343,6 +349,7 @@ private fun DeviceContentDisconnectedPreview() {
             onScreenshotClick = {},
             onShellClick = {},
             onRemoteClick = {},
+            onMirrorClick = {},
             onLogsClick = {},
             onRefreshClick = {},
             onToggleInfoClick = {},
@@ -376,6 +383,7 @@ private fun DeviceContentConnectedPreview() {
             onScreenshotClick = {},
             onShellClick = {},
             onRemoteClick = {},
+            onMirrorClick = {},
             onLogsClick = {},
             onRefreshClick = {},
             onToggleInfoClick = {},
