@@ -46,6 +46,7 @@ class ScrcpyRepository(
                         suggestion = "请重新进入屏幕镜像；如果持续失败，请降低画质或确认设备支持当前编码。",
                         cause = error,
                     )
+                    stop()
                     onStreamError(error)
                 },
             ).also { session = it }
@@ -103,6 +104,15 @@ class ScrcpyRepository(
 
     fun sendText(text: String) {
         runCatching { session?.controlClient?.sendText(text) }
+            .onFailure { error ->
+                DiagnosticLogger.record(
+                    module = DiagnosticModule.Mirror,
+                    operation = "发送文本",
+                    message = "远程文本发送失败",
+                    suggestion = "镜像连接可能已断开，请重新进入屏幕镜像。",
+                    cause = error,
+                )
+            }
     }
 
     fun stop() {

@@ -11,8 +11,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -21,6 +23,7 @@ import androidx.compose.material.icons.automirrored.outlined.VolumeDown
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Gamepad
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material.icons.outlined.PowerSettingsNew
@@ -56,6 +59,7 @@ fun MirrorScreen(
     val uiState by viewModel.uiState.collectAsState()
     var surface by remember { mutableStateOf<Surface?>(null) }
     var inputText by remember { mutableStateOf("") }
+    var controlsVisible by remember { mutableStateOf(true) }
 
     DisposableEffect(Unit) {
         onDispose { viewModel.stop() }
@@ -93,25 +97,27 @@ fun MirrorScreen(
             },
         )
 
-        MirrorTopBar(
-            deviceName = uiState.deviceName,
-            status = uiState.status,
+        MirrorTopActions(
+            controlsVisible = controlsVisible,
+            onToggleControls = { controlsVisible = !controlsVisible },
             onClose = {
                 viewModel.stop()
                 onBackClick()
             },
         )
 
-        MirrorControls(
-            modifier = Modifier.align(Alignment.BottomCenter),
-            inputText = inputText,
-            onInputTextChange = { inputText = it.take(300) },
-            onSendText = {
-                viewModel.sendText(inputText)
-                inputText = ""
-            },
-            onKey = viewModel::sendKey,
-        )
+        if (controlsVisible) {
+            MirrorControls(
+                modifier = Modifier.align(Alignment.BottomCenter),
+                inputText = inputText,
+                onInputTextChange = { inputText = it.take(300) },
+                onSendText = {
+                    viewModel.sendText(inputText)
+                    inputText = ""
+                },
+                onKey = viewModel::sendKey,
+            )
+        }
 
         if (uiState.status is OperationStatus.Running || uiState.status is OperationStatus.Failed) {
             MirrorStatus(
@@ -123,32 +129,24 @@ fun MirrorScreen(
 }
 
 @Composable
-private fun MirrorTopBar(
-    deviceName: String,
-    status: OperationStatus,
+private fun MirrorTopActions(
+    controlsVisible: Boolean,
+    onToggleControls: () -> Unit,
     onClose: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .statusBarsPadding()
             .padding(12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Card(
-            modifier = Modifier.weight(1f),
-            shape = RoundedCornerShape(8.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.48f)),
-        ) {
-            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                Text(deviceName, color = Color.White, style = MaterialTheme.typography.labelLarge)
-                Text(
-                    text = statusText(status),
-                    color = Color.White.copy(alpha = 0.78f),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-        }
+        MirrorIconButton(
+            icon = Icons.Outlined.Gamepad,
+            contentDescription = if (controlsVisible) "隐藏控制区" else "显示控制区",
+            onClick = onToggleControls,
+        )
         MirrorIconButton(icon = Icons.Outlined.Close, contentDescription = "关闭镜像", onClick = onClose)
     }
 }
@@ -164,6 +162,7 @@ private fun MirrorControls(
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .navigationBarsPadding()
             .padding(12.dp),
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.50f)),
@@ -264,14 +263,5 @@ private fun MirrorStatus(
                 else -> Unit
             }
         }
-    }
-}
-
-private fun statusText(status: OperationStatus): String {
-    return when (status) {
-        OperationStatus.Idle -> "未启动"
-        is OperationStatus.Running -> status.text
-        is OperationStatus.Success -> status.text
-        is OperationStatus.Failed -> status.text
     }
 }

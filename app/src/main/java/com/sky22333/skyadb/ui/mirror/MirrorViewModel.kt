@@ -8,10 +8,15 @@ import com.sky22333.skyadb.AppServices
 import com.sky22333.skyadb.model.AdbOperationResult
 import com.sky22333.skyadb.model.OperationStatus
 import com.sky22333.skyadb.scrcpy.ScrcpyRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 data class MirrorUiState(
     val status: OperationStatus = OperationStatus.Idle,
@@ -26,6 +31,7 @@ class MirrorViewModel(
     private val state = MutableStateFlow(MirrorUiState())
     val uiState: StateFlow<MirrorUiState> = state.asStateFlow()
 
+    private val controlScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var started = false
 
     fun start(surface: Surface) {
@@ -67,25 +73,41 @@ class MirrorViewModel(
     }
 
     fun sendTouch(event: MotionEvent, width: Int, height: Int) {
-        repository.sendTouch(event, width, height)
+        val eventCopy = MotionEvent.obtain(event)
+        controlScope.launch {
+            try {
+                repository.sendTouch(eventCopy, width, height)
+            } finally {
+                eventCopy.recycle()
+            }
+        }
     }
 
     fun sendKey(keyCode: Int) {
-        repository.sendKey(keyCode)
+        controlScope.launch {
+            repository.sendKey(keyCode)
+        }
     }
 
     fun sendText(text: String) {
-        repository.sendText(text)
+        controlScope.launch {
+            repository.sendText(text)
+        }
     }
 
     fun stop() {
         started = false
-        repository.stop()
         state.value = MirrorUiState()
+        controlScope.launch {
+            repository.stop()
+        }
     }
 
     override fun onCleared() {
-        stop()
+        controlScope.cancel()
+        runBlocking(Dispatchers.IO) {
+            repository.stop()
+        }
         super.onCleared()
     }
 }
