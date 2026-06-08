@@ -19,7 +19,7 @@ android {
 
     defaultConfig {
         applicationId = "com.sky22333.skyadb"
-        minSdk = 23
+        minSdk = 24
         targetSdk = 36
         versionCode = ciVersionCode ?: 10000
         versionName = ciVersionName ?: "1.0.0"
