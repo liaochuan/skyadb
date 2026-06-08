@@ -5,10 +5,12 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.Surface
 import com.sky22333.skyadb.adb.KadbManager
+import com.sky22333.skyadb.adb.MirrorConnections
 import com.sky22333.skyadb.diagnostics.DiagnosticLogger
 import com.sky22333.skyadb.diagnostics.DiagnosticModule
 import com.sky22333.skyadb.model.AdbOperationResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 
 class ScrcpyRepository(
@@ -16,6 +18,7 @@ class ScrcpyRepository(
     private val kadbManager: KadbManager,
 ) {
     private var session: ScrcpySession? = null
+    private var mirrorConnections: MirrorConnections? = null
 
     suspend fun start(
         surface: Surface,
@@ -26,16 +29,16 @@ class ScrcpyRepository(
         stop()
         val options = qualityPreset.options
         val optionsText = options.diagnosticText()
-        val kadb = kadbManager.createStreamingClient()
-            ?: return@withContext AdbOperationResult.Failure(
-                message = "未连接设备",
-                suggestion = "请先连接设备，再启动屏幕镜像。",
-            )
+        val connections = when (val acquired = kadbManager.beginMirrorSession()) {
+            is AdbOperationResult.Failure -> return@withContext acquired
+            is AdbOperationResult.Success -> acquired.data
+        }
+        mirrorConnections = connections
 
         runCatching {
             ScrcpySession.start(
                 context = context,
-                kadb = kadb,
+                connections = connections,
                 surface = surface,
                 options = options,
                 onVideoSize = onVideoSize,
@@ -48,13 +51,14 @@ class ScrcpyRepository(
                         suggestion = mirrorDiagnosticSuggestion(qualityPreset, optionsText, serverLog),
                         cause = error,
                     )
-                    stop()
+                    runBlocking { stop() }
                     onStreamError(error)
                 },
             ).also { session = it }
         }.fold(
             onSuccess = { AdbOperationResult.Success(it.deviceInfo) },
             onFailure = { error ->
+                stop()
                 DiagnosticLogger.record(
                     module = DiagnosticModule.Mirror,
                     operation = "启动镜像",
@@ -117,7 +121,7 @@ class ScrcpyRepository(
             }
     }
 
-    fun stop() {
+    suspend fun stop() {
         runCatching { session?.stop() }
             .onFailure { error ->
                 DiagnosticLogger.record(
@@ -129,6 +133,9 @@ class ScrcpyRepository(
                 )
             }
         session = null
+        val connections = mirrorConnections
+        mirrorConnections = null
+        kadbManager.endMirrorSession(connections)
     }
 
     private fun mirrorDiagnosticSuggestion(

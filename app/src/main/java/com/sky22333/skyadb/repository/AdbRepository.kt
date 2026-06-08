@@ -213,8 +213,6 @@ class DefaultAdbRepository(
         }
     }
 
-    suspend fun isReady(): Boolean = kadbManager.checkRuntimeReady()
-
     private fun upsertRecentDevice(device: AdbDevice): List<AdbDevice> {
         val others = recentDeviceState.value.filterNot { it.id == device.id }
         return (listOf(device) + others).take(MaxRecentDevices)

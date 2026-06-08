@@ -4,6 +4,7 @@ import android.content.Context
 import android.view.Surface
 import com.flyfishxu.kadb.Kadb
 import com.flyfishxu.kadb.stream.AdbStream
+import com.sky22333.skyadb.adb.MirrorConnections
 import java.io.EOFException
 import kotlin.random.Random
 import kotlinx.coroutines.CoroutineScope
@@ -16,9 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class ScrcpySession private constructor(
-    private val kadb: Kadb,
     private val serverStream: AdbStream,
-    private val videoStream: AdbStream,
     private val controlStream: AdbStream,
     val deviceInfo: ScrcpyDeviceInfo,
     val controlClient: ScrcpyControlClient,
@@ -39,9 +38,7 @@ class ScrcpySession private constructor(
         scope.cancel()
         decoder.stop()
         runCatching { controlStream.close() }
-        runCatching { videoStream.close() }
         runCatching { serverStream.close() }
-        runCatching { kadb.close() }
     }
 
     fun serverLogTail(maxLines: Int = 80): String {
@@ -69,52 +66,47 @@ class ScrcpySession private constructor(
     companion object {
         suspend fun start(
             context: Context,
-            kadb: Kadb,
+            connections: MirrorConnections,
             surface: Surface,
             options: ScrcpyOptions = ScrcpyOptions(),
             onVideoSize: (Int, Int) -> Unit,
             onError: (Throwable, String) -> Unit,
         ): ScrcpySession = withContext(Dispatchers.IO) {
+            val controlKadb = connections.control
+            val videoKadb = connections.video
             val serverManager = ScrcpyServerManager(context)
             val logs = ArrayDeque<String>()
-            try {
-                serverManager.pushServer(kadb)
-                val scid = generateScid()
-                val socketName = "scrcpy_${scid.toString(16).padStart(8, '0')}"
-                val serverStream = kadb.open("shell:${serverManager.buildStartCommand(scid, options)} 2>&1")
+            serverManager.pushServer(controlKadb)
+            val scid = generateScid()
+            val socketName = "scrcpy_${scid.toString(16).padStart(8, '0')}"
+            val serverStream = controlKadb.open("shell:${serverManager.buildStartCommand(scid, options)} 2>&1")
 
-                delay(200)
-                val videoStream = openLocalAbstractWithRetry(kadb, socketName, expectDummyByte = true)
-                val controlStream = openLocalAbstractWithRetry(kadb, socketName, expectDummyByte = false)
-                val name = readDeviceName(videoStream)
-                val codecId = videoStream.source.readInt()
-                val controlClient = ScrcpyControlClient(controlStream)
-                val decoder = ScrcpyVideoDecoder(
-                    stream = videoStream,
-                    codecId = codecId,
-                    surface = surface,
-                    onVideoSize = { width, height ->
-                        controlClient.updateVideoSize(width, height)
-                        onVideoSize(width, height)
-                    },
-                )
+            delay(200)
+            val videoStream = openLocalAbstractWithRetry(videoKadb, socketName, expectDummyByte = true)
+            val controlStream = openLocalAbstractWithRetry(controlKadb, socketName, expectDummyByte = false)
+            val name = readDeviceName(videoStream)
+            val codecId = videoStream.source.readInt()
+            val controlClient = ScrcpyControlClient(controlStream)
+            val decoder = ScrcpyVideoDecoder(
+                stream = videoStream,
+                codecId = codecId,
+                surface = surface,
+                onVideoSize = { width, height ->
+                    controlClient.updateVideoSize(width, height)
+                    onVideoSize(width, height)
+                },
+            )
 
-                ScrcpySession(
-                    kadb = kadb,
-                    serverStream = serverStream,
-                    videoStream = videoStream,
-                    controlStream = controlStream,
-                    deviceInfo = ScrcpyDeviceInfo(name = name, codecId = codecId),
-                    controlClient = controlClient,
-                    decoder = decoder,
-                    scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
-                    logLines = logs,
-                    onError = onError,
-                ).also { it.start() }
-            } catch (error: Throwable) {
-                runCatching { kadb.close() }
-                throw error
-            }
+            ScrcpySession(
+                serverStream = serverStream,
+                controlStream = controlStream,
+                deviceInfo = ScrcpyDeviceInfo(name = name, codecId = codecId),
+                controlClient = controlClient,
+                decoder = decoder,
+                scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+                logLines = logs,
+                onError = onError,
+            ).also { it.start() }
         }
 
         private fun generateScid(): UInt {
