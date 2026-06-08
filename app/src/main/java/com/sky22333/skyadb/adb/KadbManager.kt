@@ -14,6 +14,8 @@ import kotlinx.coroutines.withContext
 class KadbManager {
     private var activeKadb: Kadb? = null
     private var activeEndpoint: String? = null
+    private var lastConnectTimeoutMillis = 10_000
+    private var lastSocketTimeoutMillis = 30_000
 
     suspend fun connect(
         host: String,
@@ -21,6 +23,8 @@ class KadbManager {
         connectTimeoutMillis: Int = 10_000,
         socketTimeoutMillis: Int = 30_000,
     ): AdbOperationResult<String> = withContext(Dispatchers.IO) {
+        lastConnectTimeoutMillis = connectTimeoutMillis
+        lastSocketTimeoutMillis = socketTimeoutMillis
         runCatching {
             val kadb = Kadb.create(host, port, connectTimeoutMillis, socketTimeoutMillis)
             val probe = kadb.shell("echo kadb_ready")
@@ -396,15 +400,63 @@ class KadbManager {
 
     fun currentEndpoint(): String? = activeEndpoint
 
-    fun createStreamingClient(): Kadb? {
-        val endpoint = activeEndpoint ?: return null
+    /**
+     * 镜像使用两条专用连接：video 独占视频流，control 负责启动 server 与控制通道。
+     */
+    suspend fun beginMirrorSession(): AdbOperationResult<MirrorConnections> = withContext(Dispatchers.IO) {
+        val endpoint = parseEndpoint(activeEndpoint.orEmpty())
+            ?: return@withContext AdbOperationResult.Failure(
+                message = "未连接设备",
+                suggestion = "请先连接设备，再启动屏幕镜像。",
+            )
+
+        activeKadb?.close()
+        activeKadb = null
+
+        runCatching {
+            val control = Kadb.create(endpoint.host, endpoint.port, lastConnectTimeoutMillis, 0)
+            val video = try {
+                Kadb.create(endpoint.host, endpoint.port, lastConnectTimeoutMillis, 0)
+            } catch (error: Throwable) {
+                control.close()
+                throw error
+            }
+            AdbOperationResult.Success(MirrorConnections(control = control, video = video))
+        }.getOrElse { error ->
+            restoreActiveConnection()
+            AdbOperationResult.Failure(
+                message = "屏幕镜像连接失败",
+                suggestion = "请确认设备仍在线，并重新尝试进入屏幕镜像。",
+                cause = error,
+            )
+        }
+    }
+
+    suspend fun endMirrorSession(connections: MirrorConnections?) = withContext(Dispatchers.IO) {
+        runCatching { connections?.close() }
+        restoreActiveConnection()
+    }
+
+    private suspend fun restoreActiveConnection() {
+        val endpoint = parseEndpoint(activeEndpoint.orEmpty()) ?: return
+        runCatching {
+            activeKadb = Kadb.create(
+                endpoint.host,
+                endpoint.port,
+                lastConnectTimeoutMillis,
+                lastSocketTimeoutMillis,
+            )
+        }
+    }
+
+    private fun parseEndpoint(endpoint: String): Endpoint? {
         val host = endpoint.substringBeforeLast(':', missingDelimiterValue = "")
         val port = endpoint.substringAfterLast(':').toIntOrNull()
         if (host.isBlank() || port == null) return null
-        return Kadb.create(host, port, 10_000, 0)
+        return Endpoint(host, port)
     }
 
-    suspend fun checkRuntimeReady(): Boolean = true
+    private data class Endpoint(val host: String, val port: Int)
 
     private fun parseResolution(output: String): String {
         return output
